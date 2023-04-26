@@ -19,7 +19,7 @@
 
 </div></h1>
 
-Host for communicating with a QEMU Guest Agent helper daemon, which is installed in the guest. It is used to exchange information between the host and guest, and to execute commands in the guest.
+Tool for communicating with a QEMU Guest Agent helper daemon, it is used to exchange information between the host and guest, and to execute commands in the guest.
 
 ### Detailed Summary
 
