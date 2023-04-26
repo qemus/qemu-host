@@ -18,7 +18,7 @@ ENV VERSION=$VERSION_ARG
 LABEL org.opencontainers.image.created=${DATE_ARG}
 LABEL org.opencontainers.image.revision=${BUILD_ARG}
 LABEL org.opencontainers.image.version=${VERSION_ARG}
-LABEL org.opencontainers.image.url=https://hub.docker.com/r/qemux/qemu-host/
 LABEL org.opencontainers.image.source=https://github.com/qemu-tools/qemu-host/
+LABEL org.opencontainers.image.url=https://github.com/qemu-tools/qemu-host/pkgs/container/qemu-host
 
 ENTRYPOINT ["/qemu-host.bin"]
