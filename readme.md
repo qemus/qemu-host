@@ -19,9 +19,11 @@
 
 </div></h1>
 
-Tool for communicating with a QEMU Guest Agent helper daemon, it is used to exchange information between the host and guest, and to execute commands in the guest.
+Tool for communicating with a QEMU Guest Agent helper daemon.
 
-### Detailed Summary
+It is used to exchange information between the host and guest, and to execute commands in the guest.
+
+### Background
 
 Ultimately the QEMU Guest Agent aims to provide access to a system-level agent via standard QMP commands.
 
