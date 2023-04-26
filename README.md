@@ -20,5 +20,6 @@
 [gh_last_release_svg]: https://img.shields.io/docker/v/qemux/qemu-host?arch=amd64&sort=date
 
 </div></h1>
+
 Host for communicating with a QEMU Agent.
 
