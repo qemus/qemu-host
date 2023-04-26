@@ -1,6 +1,6 @@
 FROM golang:alpine as builder
 
-COPY / /src/qemu-host/
+COPY src/ /src/qemu-host/
 WORKDIR /src/qemu-host
 
 RUN go mod download
