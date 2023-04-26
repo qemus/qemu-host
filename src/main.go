@@ -27,14 +27,13 @@ type REQ struct {
 	Reserve      int32
 }
 
-var GuestCPUs = flag.Int("cpu", 1, "Num of Guest CPU")
-var Cluster_UUID = "3bdea92b-68f4-4fe9-aa4b-d645c3c63864"
-var HostFixNumber = flag.Int("fixNumber", 0, "Fix Number of Host")
-var VmTimestamp = flag.Int("vmmts", 1679863686, "VM Timestamp")
-var VmVersion = flag.String("vmmversion", "2.6.1-12139", "VM Version")
+var GuestCPUs = flag.Int("cpu", 1, "Number of CPU cores")
+var VmTimestamp = flag.Int("ts", 1679863686, "VM Timestamp")
+var VmVersion = flag.String("version", "2.6.1-12139", "VM Version")
+var HostFixNumber = flag.Int("fixNumber", 0, "Fix number of Host")
+var HostBuildNumber = flag.Int("build", 42962, "Build number of Host")
 var HostSN = flag.String("hostsn", "0000000000000", "Host SN, 13 bytes")
 var GuestSN = flag.String("guestsn", "0000000000000", "Guest SN, 13 bytes")
-var HostBuildNumber = flag.Int("buildnumber", 42962, "Build Number of Host")
 var GuestCPU_ARCH = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
 var GuestUUID = flag.String("guestuuid", "ba13a19a-c0c1-4fef-9346-915ed3b98341", "Guest UUID")
 
@@ -156,7 +155,7 @@ func process_req(buf []byte, conn net.Conn) {
 		data = *GuestUUID
 	case 12:
 		// cluster UUID
-		data = Cluster_UUID
+		data = "3bdea92b-68f4-4fe9-aa4b-d645c3c63864"
 	case 13:
 		// Host SN
 		data = *HostSN
