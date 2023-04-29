@@ -14,8 +14,8 @@
 [qemu-ghcr]: https://github.com/orgs/qemu-tools/packages/container/package/qemu-host
 
 [build_img]: https://github.com/qemu-tools/qemu-host/actions/workflows/build.yml/badge.svg
-[Docker Image Size]: https://ghcr-badge.egpl.dev/qemu-tools/qemu-host/size?color=SteelBlue
-[gh_last_release_svg]: https://ghcr-badge.egpl.dev/qemu-tools/qemu-host/tags?n=1&label=version&color=SteelBlue
+[Docker Image Size]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/size?color=SteelBlue
+[gh_last_release_svg]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/tags?n=1&label=version&color=SteelBlue
 
 </div></h1>
 
