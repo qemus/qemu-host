@@ -13,6 +13,7 @@ on:
 
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -59,6 +60,7 @@ jobs:
 
   release:
     needs: build
+    name: Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -79,7 +81,7 @@ jobs:
         echo "NEW_MINOR=$((${{ secrets.MINOR }}+1))" >> $GITHUB_ENV
     -
       name: Update minor version
-      uses: hmanzur/actions-set-secret@v2.0.0
+      uses: kroese/set-secret@v3
       with:
         name: 'MINOR'
         value: ${{ env.NEW_MINOR }}
@@ -87,6 +89,7 @@ jobs:
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
     
   mirror:
+    name: Mirror
     runs-on: ubuntu-latest
     permissions:
       contents: read
