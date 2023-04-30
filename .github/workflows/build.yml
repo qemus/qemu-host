@@ -79,13 +79,26 @@ jobs:
       name: Increment minor version
       run: |
         echo "NEW_MINOR=$((${{ secrets.MINOR }}+1))" >> $GITHUB_ENV
-    -
+     -
       name: Update minor version
       uses: kroese/set-secret@v4
       with:
         name: 'MINOR'
         value: ${{ env.NEW_MINOR }}
-        repository: ${{ github.repository }}
+        token: ${{ secrets.REPO_ACCESS_TOKEN }}
+    -
+      name: Update major version variable
+      uses: kroese/set-variable@v2
+      with:
+        name: 'MAJOR'
+        value: ${{ secrets.MAJOR }}
+        token: ${{ secrets.REPO_ACCESS_TOKEN }}
+    -
+      name: Update minor version variable
+      uses: kroese/set-variable@v2
+      with:
+        name: 'MINOR'
+        value: ${{ env.NEW_MINOR }}
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
     
   mirror:
