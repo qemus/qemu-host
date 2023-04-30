@@ -88,14 +88,14 @@ jobs:
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
     -
       name: Update major version variable
-      uses: kroese/set-variable@v2
+      uses: kroese/set-variable@v3
       with:
         name: 'MAJOR'
         value: ${{ secrets.MAJOR }}
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
     -
       name: Update minor version variable
-      uses: kroese/set-variable@v2
+      uses: kroese/set-variable@v3
       with:
         name: 'MINOR'
         value: ${{ env.NEW_MINOR }}
