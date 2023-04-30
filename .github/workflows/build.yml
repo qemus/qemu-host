@@ -79,7 +79,7 @@ jobs:
       name: Increment minor version
       run: |
         echo "NEW_MINOR=$((${{ secrets.MINOR }}+1))" >> $GITHUB_ENV
-     -
+    -
       name: Update minor version
       uses: kroese/set-secret@v4
       with:
