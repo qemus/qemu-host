@@ -6,16 +6,16 @@
 
 <div align="center">
 
-[![build_img]][build_url]
-[![gh_last_release_svg]][qemu-ghcr]
-[![Docker Image Size]][qemu-ghcr]
+[![Build]][build_url]
+[![Version]][ghcr_url]
+[![Size]][ghcr_url]
 
 [build_url]: https://github.com/qemu-tools/qemu-host/
-[qemu-ghcr]: https://github.com/orgs/qemu-tools/packages/container/package/qemu-host
+[ghcr_url]: https://github.com/orgs/qemu-tools/packages/container/package/qemu-host
 
-[build_img]: https://github.com/qemu-tools/qemu-host/actions/workflows/build.yml/badge.svg
-[Docker Image Size]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/size?color=%23066da5
-[gh_last_release_svg]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/tags?n=1&label=version&color=%23066da5&ignore=latest
+[Build]: https://github.com/qemu-tools/qemu-host/actions/workflows/build.yml/badge.svg
+[Size]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/size?color=%23066da5
+[Version]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/tags?n=1&label=version&color=%23066da5&ignore=latest
 
 </div></h1>
 
