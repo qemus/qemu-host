@@ -1,12 +1,11 @@
-<h1 align="center">QEMU Host
-<br />
+<h1 align="center">QEMU Host<br />
 <div align="center">
 <img src="https://github.com/qemu-tools/qemu-docker/raw/master/.github/logo.png" title="Logo" style="max-width:100%;" width="256" />
 </div>
 <div align="center">
 
 [![Build]][build_url]
-[![Version]][ghcr_url]
+[![Version]][build_url]
 [![Size]][ghcr_url]
 
 [build_url]: https://github.com/qemu-tools/qemu-host/
