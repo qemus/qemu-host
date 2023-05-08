@@ -130,7 +130,7 @@ func process_req(buf []byte, conn net.Conn) {
 		data = string(buf[64 : 64+req.ReqLength])
 	} else if req.IsResp == 1 {
 		data = string(buf[64 : 64+req.RespLength])
-		LastData = data
+		LastData = strings.Replace(data, "\x00", "", -1)
 		LastResponse = (int)(req.CommandID)
 	}
 
