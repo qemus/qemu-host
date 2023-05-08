@@ -102,7 +102,7 @@ func incoming_conn(conn net.Conn) {
 
 var commandsName = map[int]string{
 	2:  "Guest info",
-	3:  "Guest Power info",
+	3:  "Guest power",
 	4:  "Host version",
 	5:  "Guest SN",
 	6:  "Guest shutdown",
