@@ -8,13 +8,6 @@
 [![Version]][ghcr_url]
 [![Size]][ghcr_url]
 
-[build_url]: https://github.com/qemu-tools/qemu-host/
-[ghcr_url]: https://github.com/orgs/qemu-tools/packages/container/package/qemu-host
-
-[Build]: https://github.com/qemu-tools/qemu-host/actions/workflows/build.yml/badge.svg
-[Size]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/size?color=%23066da5
-[Version]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/tags?n=1&label=version&color=%23066da5&ignore=latest
-
 </div></h1>
 
 Tool for communicating with a QEMU Guest Agent daemon.
@@ -51,3 +44,10 @@ When QAPI-based QMP is available (somewhere around the QEMU 0.16 timeframe), a d
 Currently this is planned to be done as a pseudo-chardev that only QEMU/QMP sees or interacts with, but the ultimate implementation may vary to some degree. The net effect should the same however: guest agent commands will be exposed in the same manner as QMP commands using the same QMP server, and communication with the agent will be handled by QEMU, transparently to the client.
 
 The current list of supported RPCs is documented in qemu.git/qapi-schema-guest.json.
+
+[build_url]: https://github.com/qemu-tools/qemu-host/
+[ghcr_url]: https://github.com/orgs/qemu-tools/packages/container/package/qemu-host
+
+[Build]: https://github.com/qemu-tools/qemu-host/actions/workflows/build.yml/badge.svg
+[Size]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/size?color=%23066da5
+[Version]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/tags?n=1&label=version&color=%23066da5&ignore=latest
