@@ -225,23 +225,23 @@ func read(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	commandID, err = strconv.Atoi(query.Get("command"))
 
-	log.Printf("Reading command: %d from guest \n", commandID)
-
 	if (err != nil || commandID < 1) {
-		log.Printf("Failed reading command from guest \n")
+		log.Printf("Failed parsing command %s \n", query.Get("command"))
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Invalid command ID"}`))
 		return
 	}
+	
+	log.Printf("Reading command: %d from guest \n", commandID)
 
 	if (send_command((int32)(commandID), 1, 1) == false) {
-		log.Printf("Failed reading command from guest (2)\n")	
+		log.Printf("Failed reading command %d from guest \n", commandID)	
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Failed to send command"}`))
+		w.Write([]byte(`{"status": "error", "data": null, "message": "Failed to read command"}`))
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15 * time.Second)
 	defer cancel()
 	for {
 		time.Sleep(100 * time.Millisecond)
@@ -251,7 +251,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if (LastResponse != commandID) {
-		log.Printf("Failed reading command from guest (3)\n")	
+		log.Printf("Timed out reading command %d from guest (%d) \n", commandID, LastResponse)	
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no response"}`))
 		return
@@ -262,9 +262,9 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if (LastData == "") {
-		log.Printf("Failed reading command from guest (4)\n")	
+		log.Printf("Received no data for command %d \n", commandID)	
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no response"}`))
+		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no data"}`))
 		return
 	}
 
@@ -283,17 +283,17 @@ func write(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	commandID, err = strconv.Atoi(query.Get("command"))
 
-	log.Printf("Sending command: %d to guest \n", commandID)
-
 	if (err != nil || commandID < 1) {
-		log.Printf("Failed sending command to guest \n")
+		log.Printf("Failed parsing command %s \n", query.Get("command"))
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Invalid command ID"}`))
 		return
 	}
-
+	
+	log.Printf("Sending command: %d to guest \n", commandID)
+        
 	if (send_command((int32)(commandID), 1, 0) == false) {
-		log.Printf("Failed sending command to guest (2)\n")
+		log.Printf("Failed sending command %d to guest \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Failed to send command"}`))
 		return
