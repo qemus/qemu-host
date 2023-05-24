@@ -32,10 +32,8 @@ jobs:
         name: Prepare Docker build
         id: prepare
         run: |
-        
           PLATFORMS="linux/amd64,linux/arm64"
           VERSION="${{ vars.MAJOR }}.${{ vars.MINOR }}"
-          
           TAGS=()
           TAGS=("${{ secrets.DOCKERHUB_REPO }}:latest")
           TAGS+=("${{ secrets.DOCKERHUB_REPO }}:${{ VERSION }}")
