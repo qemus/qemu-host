@@ -105,11 +105,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
         with:
-          tag: "${{ steps.prepare.outputs.version }}"
-          title: "${{ steps.prepare.outputs.version }}"
+          tag: "v${{ steps.prepare.outputs.version }}"
+          title: "v${{ steps.prepare.outputs.version }}"
           body: |
-            ## Changelog :eyes:
-
             ${{ steps.changelog.outputs.changes }}
 
             **Full Changelog**: https://github.com/${{ github.repository }}/compare//${{ env.previousTag }}...v${{ steps.prepare.outputs.version }}
