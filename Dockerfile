@@ -1,10 +1,12 @@
-FROM golang:alpine as builder
+FROM --platform=$BUILDPLATFORM golang:alpine as builder
 
 COPY src/ /src/qemu-host/
 WORKDIR /src/qemu-host
 
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /src/qemu-host/main .
+
+ARG TARGETOS TARGETARCH
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -installsuffix cgo -o /src/qemu-host/main .
 
 FROM scratch
 
