@@ -34,16 +34,16 @@ jobs:
         run: |
         
           PLATFORMS="linux/amd64,linux/arm64"
-          VERSION="${{ vars.MAJOR }}.${{ vars.MINOR }}"
+          TARGET_VERSION="${{ vars.MAJOR }}.${{ vars.MINOR }}"
           
           TAGS=()
           TAGS=("${{ secrets.DOCKERHUB_REPO }}:latest")
-          TAGS+=("${{ secrets.DOCKERHUB_REPO }}:${{ VERSION }}")
+          TAGS+=("${{ secrets.DOCKERHUB_REPO }}:${{ TARGET_VERSION }}")
           TAGS+=("ghcr.io/${{ github.repository }}:latest")
-          TAGS+=("ghcr.io/${{ github.repository }}:${{ VERSION }}")
+          TAGS+=("ghcr.io/${{ github.repository }}:${{ TARGET_VERSION }}")
           
           echo ::set-output name=tags::${TAGS[@]}
-          echo ::set-output name=version::${VERSION}
+          echo ::set-output name=version::${TARGET_VERSION}
           echo ::set-output name=docker_platforms::${PLATFORMS}
           echo ::set-output name=build_date::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
       -
