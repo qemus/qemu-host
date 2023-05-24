@@ -32,6 +32,7 @@ jobs:
         name: Prepare Docker build
         id: prepare
         run: |
+        
           PLATFORMS="linux/amd64,linux/arm64"
           VERSION="${{ vars.MAJOR }}.${{ vars.MINOR }}"
           
@@ -61,13 +62,13 @@ jobs:
       - 
         name: Build Docker image
         run: |
+        
           TAGS=(${{ steps.prepare.outputs.tags }})
 
           echo "Build date: ${{ steps.prepare.outputs.build_date }}"
           echo "Docker platform: ${{ steps.prepare.outputs.docker_platforms }}"
-     
           echo "Tags: ${{ steps.prepare.outputs.tags }}"
-
+          
           echo docker buildx build --platform ${{ steps.prepare.outputs.docker_platforms }} \
             --output "type=image,push=true" \
             --progress=plain \
