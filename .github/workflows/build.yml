@@ -96,8 +96,9 @@ jobs:
           token: ${{ github.token }}
           fromTag: ${{ github.ref_name }}
           toTag: ${{ env.previousTag }}
-          reverseOrder: true
           writeToFile: false
+          reverseOrder: true
+          includeInvalidCommits: true
           excludeTypes: "docs,build,chore"
       -
         name: Create a release
