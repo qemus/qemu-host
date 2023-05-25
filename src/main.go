@@ -136,7 +136,7 @@ func process_req(buf []byte, conn net.Conn) {
 	}
 
 	// log.Printf("%#v\n", req)
-	log.Printf("Command: %s from Guest:%d \n", commandsName[int(req.CommandID)], req.GuestID)
+	log.Printf("Command: %s \n", commandsName[int(req.CommandID)])
 	if data != "" {
 		log.Printf("Info: %s\n", data)
 	}
@@ -232,7 +232,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	log.Printf("Reading command: %d from guest \n", commandID)
+	log.Printf("Reading command: %d \n", commandID)
 
 	if (send_command((int32)(commandID), 1, 1) == false) {
 		log.Printf("Failed reading command %d from guest \n", commandID)	
@@ -290,7 +290,7 @@ func write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	log.Printf("Sending command: %d to guest \n", commandID)
+	log.Printf("Sending command: %d \n", commandID)
         
 	if (send_command((int32)(commandID), 1, 0) == false) {
 		log.Printf("Failed sending command %d to guest \n", commandID)
