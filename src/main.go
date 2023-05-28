@@ -35,6 +35,7 @@ var VmTimestamp = flag.Int("ts", 1679863686, "VM Timestamp")
 var VmVersion = flag.String("version", "2.6.1-12139", "VM Version")
 var HostFixNumber = flag.Int("fixNumber", 0, "Fix number of Host")
 var HostBuildNumber = flag.Int("build", 42962, "Build number of Host")
+var HostMAC = flag.String("mac", "02-11-32-AA-BB-CC", "Host MAC address")
 var HostSN = flag.String("hostsn", "0000000000000", "Host SN, 13 bytes")
 var GuestSN = flag.String("guestsn", "0000000000000", "Guest SN, 13 bytes")
 var GuestCPU_ARCH = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
@@ -70,12 +71,13 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Fatalln("Error on accept", err.Error())
-			return
+			log.Println("Error on accept", err.Error())
 		}
-		log.Printf("New connection from %s\n", conn.RemoteAddr().String())
+		else {
+			log.Printf("New connection from %s\n", conn.RemoteAddr().String())
 
-		go incoming_conn(conn)
+			go incoming_conn(conn)
+		}
 	}
 }
 
@@ -114,6 +116,7 @@ var commandsName = map[int]string{
 	11: "Guest UUID",
 	12: "Cluster UUID",
 	13: "Host SN",
+	14: "Host MAC",
 	16: "Update Deadline",
 	17: "Guest Timestamp",
 }
@@ -174,6 +177,9 @@ func process_req(buf []byte, conn net.Conn) {
 	case 13:
 		// Host SN
 		data = *HostSN
+	case 14:
+		// Host MAC
+		data = *HostMAC
 	case 16:
 		// Update Dead line time, always 0x7fffffffffffffff
 		data = "9223372036854775807"
@@ -231,7 +237,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Invalid command ID"}`))
 		return
 	}
-	
+
 	log.Printf("Reading command: %d \n", commandID)
 
 	if (send_command((int32)(commandID), 1, 1) == false) {
@@ -262,7 +268,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if (LastData == "") {
-		log.Printf("Received no data for command %d \n", commandID)	
+		log.Printf("Received no data for command %d \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no data"}`))
 		return
@@ -289,9 +295,9 @@ func write(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Invalid command ID"}`))
 		return
 	}
-	
+
 	log.Printf("Sending command: %d \n", commandID)
-        
+
 	if (send_command((int32)(commandID), 1, 0) == false) {
 		log.Printf("Failed sending command %d to guest \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
