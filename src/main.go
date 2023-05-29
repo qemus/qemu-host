@@ -35,6 +35,7 @@ var VmTimestamp = flag.Int("ts", 1679863686, "VM Timestamp")
 var VmVersion = flag.String("version", "2.6.1-12139", "VM Version")
 var HostFixNumber = flag.Int("fixNumber", 0, "Fix number of Host")
 var HostBuildNumber = flag.Int("build", 42962, "Build number of Host")
+var HostModel = flag.String("model", "Virtualhost", "Host model name")
 var HostMAC = flag.String("mac", "02-11-32-AA-BB-CC", "Host MAC address")
 var HostSN = flag.String("hostsn", "0000000000000", "Host SN, 13 bytes")
 var GuestSN = flag.String("guestsn", "0000000000000", "Guest SN, 13 bytes")
@@ -109,13 +110,14 @@ var commandsName = map[int]string{
 	5:  "Guest SN",
 	6:  "Guest shutdown",
 	7:  "Guest CPU info",
-	9:  "Host version",
 	8:  "VM version",
+	9:  "Host version",
 	10: "Get Guest Info",
 	11: "Guest UUID",
 	12: "Cluster UUID",
 	13: "Host SN",
 	14: "Host MAC",
+	15: "Host model",
 	16: "Update Deadline",
 	17: "Guest Timestamp",
 }
@@ -179,6 +181,9 @@ func process_req(buf []byte, conn net.Conn) {
 	case 14:
 		// Host MAC
 		data = *HostMAC
+	case 15:
+		// Host model
+		data = *HostModel
 	case 16:
 		// Update Dead line time, always 0x7fffffffffffffff
 		data = "9223372036854775807"
