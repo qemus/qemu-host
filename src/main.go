@@ -72,8 +72,7 @@ func main() {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Println("Error on accept", err.Error())
-		}
-		else {
+		} else {
 			log.Printf("New connection from %s\n", conn.RemoteAddr().String())
 
 			go incoming_conn(conn)
