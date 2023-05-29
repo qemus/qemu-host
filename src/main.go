@@ -180,6 +180,7 @@ func process_req(buf []byte, conn net.Conn) {
 		data = *HostSN
 	case 14:
 		// Host MAC
+		HostMAC = strings.ReplaceAll(strings.ToLower(HostMAC), "-", ":")
 		data = *HostMAC
 	case 15:
 		// Host model
