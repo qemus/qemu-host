@@ -36,7 +36,7 @@ var VmVersion = flag.String("version", "2.6.1-12139", "VM Version")
 var HostFixNumber = flag.Int("fixNumber", 0, "Fix number of Host")
 var HostBuildNumber = flag.Int("build", 42962, "Build number of Host")
 var HostModel = flag.String("model", "Virtualhost", "Host model name")
-var HostMAC = flag.String("mac", "02:11:32:AA:BB:CC", "Host MAC address")
+var HostMAC = flag.String("mac", "02:11:32:aa:bb:cc", "Host MAC address")
 var HostSN = flag.String("hostsn", "0000000000000", "Host SN, 13 bytes")
 var GuestSN = flag.String("guestsn", "0000000000000", "Guest SN, 13 bytes")
 var GuestCPU_ARCH = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
@@ -180,8 +180,8 @@ func process_req(buf []byte, conn net.Conn) {
 		data = *HostSN
 	case 14:
 		// Host MAC
-		HostMAC = strings.ReplaceAll(strings.ToLower(HostMAC), "-", ":")
 		data = *HostMAC
+		data = strings.ToLower(strings.ReplaceAll(data, "-", ":"))
 	case 15:
 		// Host model
 		data = *HostModel
@@ -191,7 +191,7 @@ func process_req(buf []byte, conn net.Conn) {
 	case 17:
 		// TimeStamp
 	default:
-		log.Printf("No handler for this command %d\n", req.CommandID)
+		log.Printf("No handler for command: %d\n", req.CommandID)
 		return
 	}
 
