@@ -5,8 +5,9 @@
 <div align="center">
 
 [![Build]][build_url]
-[![Version]][ghcr_url]
-[![Size]][ghcr_url]
+[![Version]][tag_url]
+[![Size]][tag_url]
+[![Pulls]][hub_url]
 
 </div></h1>
 
@@ -46,8 +47,10 @@ Currently this is planned to be done as a pseudo-chardev that only QEMU/QMP sees
 The current list of supported RPCs is documented in qemu.git/qapi-schema-guest.json.
 
 [build_url]: https://github.com/qemu-tools/qemu-host/
-[ghcr_url]: https://github.com/orgs/qemu-tools/packages/container/package/qemu-host
+[hub_url]: https://hub.docker.com/r/qemux/qemu-host/
+[tag_url]: https://hub.docker.com/r/qemux/qemu-host/tags
 
 [Build]: https://github.com/qemu-tools/qemu-host/actions/workflows/build.yml/badge.svg
-[Size]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/size?color=%23066da5
-[Version]: https://ghcr-badge.deta.dev/qemu-tools/qemu-host/tags?n=1&label=version&color=%23066da5&ignore=latest
+[Size]: https://img.shields.io/docker/image-size/qemux/qemu-host/latest?color=066da5&label=size
+[Pulls]: https://img.shields.io/docker/pulls/qemux/qemu-host.svg?style=flat&label=pulls&logo=docker
+[Version]: https://img.shields.io/docker/v/qemux/qemu-host/latest?arch=amd64&sort=semver&color=066da5
