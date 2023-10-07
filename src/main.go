@@ -40,7 +40,8 @@ var HostMAC = flag.String("mac", "00:00:00:00:00:00", "Host MAC address")
 var HostSN = flag.String("hostsn", "0000000000000", "Host SN, 13 bytes")
 var GuestSN = flag.String("guestsn", "0000000000000", "Guest SN, 13 bytes")
 var GuestCPU_ARCH = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
-var GuestUUID = flag.String("guestuuid", "ba13a19a-c0c1-4fef-9346-915ed3b98341", "Guest UUID")
+var GuestUUID = flag.String("guestuuid", "aa00bc73-4772-4fda-b134-c737485ff084", "Guest UUID")
+var ClusterUUID = flag.String("clusteruuid", "cff85464-cfe2-40a2-9a8c-7eeebdaad8be", "Cluster UUID")
 
 var ApiPort = flag.String("api", ":2210", "API port")
 var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
@@ -173,8 +174,8 @@ func process_req(buf []byte, conn net.Conn) {
 		// Guest UUID
 		data = *GuestUUID
 	case 12:
-		// cluster UUID
-		data = "3bdea92b-68f4-4fe9-aa4b-d645c3c63864"
+		// Cluster UUID
+		data = *ClusterUUID
 	case 13:
 		// Host SN
 		data = *HostSN
