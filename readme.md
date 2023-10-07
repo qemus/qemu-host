@@ -15,6 +15,25 @@ Tool for communicating with a QEMU Guest Agent daemon.
 
 It is used to exchange information between the host and guest, and to execute commands in the guest.
 
+## Usage
+
+Via `docker-compose.yml`
+
+```yaml
+version: "3"
+services:
+    qemu:
+        container_name: qemu
+        image: qemux/qemu-host:latest
+        restart: on-failure
+```
+
+Via `docker run`
+
+```bash
+docker run -it --rm qemux/qemu-host:latest
+```
+
 ### Background
 
 Ultimately the QEMU Guest Agent aims to provide access to a system-level agent via standard QMP commands.
