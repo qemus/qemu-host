@@ -22,10 +22,10 @@ Via `docker-compose.yml`
 ```yaml
 version: "3"
 services:
-    qemu:
-        container_name: qemu
-        image: qemux/qemu-host:latest
-        restart: on-failure
+  qemu:
+    container_name: qemu
+    image: qemux/qemu-host:latest
+    restart: on-failure
 ```
 
 Via `docker run`
