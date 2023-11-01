@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"math/rand"
 	"encoding/binary"
-	"github.com/gorilla/mux"
 )
 
 type REQ struct {
@@ -54,12 +53,12 @@ func main() {
 
 	flag.Parse()
 
-	r := mux.NewRouter()
-	r.HandleFunc("/", home)
-	r.HandleFunc("/read", read)
-	r.HandleFunc("/write", write)
+	router := http.NewServeMux()
+	router.HandleFunc("/", home)
+	router.HandleFunc("/read", read)
+	router.HandleFunc("/write", write)
 
-	go http.ListenAndServe(*ApiPort, r)
+	go http.ListenAndServe(*ApiPort, router)
 
 	listener, err := net.Listen("tcp", *ListenAddr)
 
