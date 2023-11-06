@@ -11,8 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"net/http"
-	"math/rand"
 	"encoding/binary"
+	mrand "math/rand"
+        crand "crypto/rand"
 )
 
 type REQ struct {
@@ -39,6 +40,7 @@ var HostMAC = flag.String("mac", "00:00:00:00:00:00", "Host MAC address")
 var HostSN = flag.String("hostsn", "0000000000000", "Host SN, 13 bytes")
 var GuestSN = flag.String("guestsn", "0000000000000", "Guest SN, 13 bytes")
 var GuestCPU_ARCH = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
+
 var GuestUUID = flag.String("guestuuid", "aa00bc73-4772-4fda-b134-c737485ff084", "Guest UUID")
 var ClusterUUID = flag.String("clusteruuid", "cff85464-cfe2-40a2-9a8c-7eeebdaad8be", "Cluster UUID")
 
@@ -327,7 +329,7 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	req.ReqLength = 0
 	req.RespLength = 0
 	req.GuestID = 10000000
-	req.RandID = rand.Int63()
+	req.RandID = mrand.Int63()
 	req.NeedResponse = needsResp
 
 	var buf = make([]byte, 0, 4096)
@@ -348,4 +350,17 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	LastConnection.Write(buf)
 	return true
 
+}
+
+func uuid() string {
+
+	b := make([]byte, 16)
+	_, err := crand.Read(b)
+
+	if err != nil {
+		log.Println("Error on uuid", err.Error())
+		return "aa00bc73-4772-4fda-b134-c737485ff084"
+	}
+
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%12x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
