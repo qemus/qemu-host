@@ -32,7 +32,7 @@ type REQ struct {
 
 var GuestCPUs = flag.Int("cpu", 1, "Number of CPU cores")
 var VmVersion = flag.String("version", "2.6.5-12202", "VM Version")
-var VmTimestamp = flag.Int("ts", time.Now().Unix(), "VM Timestamp")
+var VmTimestamp = flag.Int("ts", int(time.Now().Unix()), "VM Time")
 var HostFixNumber = flag.Int("fixNumber", 0, "Fix number of Host")
 var HostBuildNumber = flag.Int("build", 69057, "Build number of Host")
 var HostModel = flag.String("model", "Virtualhost", "Host model name")
