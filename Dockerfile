@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.21.3-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.21-alpine as builder
 
 COPY src/ /src/qemu-host/
 WORKDIR /src/qemu-host
