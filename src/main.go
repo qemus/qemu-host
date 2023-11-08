@@ -172,9 +172,18 @@ func process_req(buf []byte, conn net.Conn) {
 	}
 
 	fmt.Printf("Command: %s [%d]\n", commandsName[int(req.CommandID)], int(req.CommandID))
-	if data != "" { fmt.Printf("Info: %s\n", data) }
+	if strings.Replace(data, "\x00", "", -1) != "" { fmt.Printf("Info: %s\n", strings.Replace(data, "\x00", "", -1)) }
 
-	// Hard code of command
+	// if it's a req and need a response
+	if req.IsReq == 1 && req.NeedResponse == 1 {
+		process_resp(req, data, conn)
+	}
+}
+
+func process_resp(req REQ, input string, conn net.Conn) {
+
+	var data string
+
 	switch req.CommandID {
 	case 2:
 		// Guest Info
@@ -227,30 +236,26 @@ func process_req(buf []byte, conn net.Conn) {
 		return
 	}
 
-	// if it's a req and need a response
-	if req.IsReq == 1 && req.NeedResponse == 1 {
-		buf = make([]byte, 0, 4096)
-		writer := bytes.NewBuffer(buf)
-		req.IsResp = 1
-		req.IsReq = 0
-		req.ReqLength = 0
-		req.RespLength = int32(len([]byte(data)) + 1)
-		fmt.Printf("Response data: %s\n", data)
+	var buf = make([]byte, 0, 4096)
+	writer := bytes.NewBuffer(buf)
+	req.IsReq = 0
+	req.IsResp = 1
+	req.ReqLength = 0
+	req.RespLength = int32(len([]byte(data)) + 1)
+	if data != "" { fmt.Printf("Response data: %s\n", data) }
 
-		// write to buf
-		binary.Write(writer, binary.LittleEndian, &req)
-		writer.Write([]byte(data))
-		res := writer.Bytes()
-		// full fill 4096
-		buf = make([]byte, 4096, 4096)
-		copy(buf, res)
+	// write to buf
+	binary.Write(writer, binary.LittleEndian, &req)
+	writer.Write([]byte(data))
+	res := writer.Bytes()
+	// full fill 4096
+	buf = make([]byte, 4096, 4096)
+	copy(buf, res)
 
-		_, err := conn.Write(buf)
+	_, err := conn.Write(buf)
 
-		if err != nil {
-			log.Println("Write error:", err.Error())
-			return
-		}
+	if err != nil {
+		log.Println("Write error:", err.Error())
 	}
 }
 
@@ -274,11 +279,8 @@ func read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var err error
-	var commandID int
-
 	query := r.URL.Query()
-	commandID, err = strconv.Atoi(query.Get("command"))
+	commandID, err := strconv.Atoi(query.Get("command"))
 
 	if err != nil || commandID < 1 {
 		log.Printf("Failed parsing command %s \n", query.Get("command"))
@@ -350,11 +352,8 @@ func write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var err error
-	var commandID int
-
 	query := r.URL.Query()
-	commandID, err = strconv.Atoi(query.Get("command"))
+	commandID, err := strconv.Atoi(query.Get("command"))
 
 	if err != nil || commandID < 1 {
 		log.Printf("Failed parsing command %s \n", query.Get("command"))
