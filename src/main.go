@@ -35,6 +35,18 @@ type REQ struct {
 	Reserve      int32
 }
 
+type RESP struct {
+    id int32
+    data string
+}
+
+var Executed bool
+var Chan chan RESP
+var WaitingFor int32
+var Writer sync.Mutex
+var Reader sync.Mutex
+var Connection net.Conn
+
 var GuestCPUs = flag.Int("cpu", 1, "Number of CPU cores")
 var VmVersion = flag.String("version", "2.6.5-12202", "VM Version")
 var VmTimestamp = flag.Int("ts", int(time.Now().Unix()), "VM Time")
@@ -51,14 +63,6 @@ var ClusterUUID = flag.String("clusteruuid", uuid(), "Cluster UUID")
 
 var ApiPort = flag.String("api", ":2210", "API port")
 var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
-
-var Executed bool
-var Writer sync.Mutex
-var Reader sync.Mutex
-
-var LastData string
-var LastResponse int32
-var LastConnection net.Conn
 
 func main() {
 
@@ -94,7 +98,8 @@ func main() {
 
 func incoming_conn(conn net.Conn) {
 
-	LastConnection = conn
+	Connection = conn
+	if Chan == nil { Chan = make(chan RESP, 1) }
 
 	for {
 		buf := make([]byte, 4096)
@@ -151,8 +156,13 @@ func process_req(buf []byte, conn net.Conn) {
 		data = string(buf[64 : 64+req.ReqLength])
 	} else if req.IsResp == 1 {
 		data = string(buf[64 : 64+req.RespLength])
-		LastData = strings.Replace(data, "\x00", "", -1)
-		atomic.StoreInt32(&LastResponse, req.CommandID)
+		if req.CommandID == atomic.LoadInt32(&WaitingFor) {
+			atomic.StoreInt32(&WaitingFor, 0)
+			var resp RESP
+			resp.id = req.CommandID
+			resp.data = strings.Replace(data, "\x00", "", -1)
+			Chan <- resp
+		}
 	}
 
 	fmt.Printf("Command: %s [%d]\n", commandsName[int(req.CommandID)], int(req.CommandID))
@@ -252,8 +262,11 @@ func read(w http.ResponseWriter, r *http.Request) {
 	Writer.Lock()
 	defer Writer.Unlock()
 
-	LastData = ""
-	atomic.StoreInt32(&LastResponse, 0)
+	if Connection == nil || Chan == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"status": "error", "data": null, "message": "No connection to guest"}`))
+		return
+	}
 
 	var err error
 	var commandID int
@@ -269,36 +282,41 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Printf("Reading command: %d \n", commandID)
+	atomic.StoreInt32(&WaitingFor, (int32)(commandID))
 
 	if !send_command((int32)(commandID), 1, 1) {
+		atomic.StoreInt32(&WaitingFor, 0)
 		log.Printf("Failed reading command %d from guest \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Failed to read command"}`))
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	for {
-		time.Sleep(100 * time.Millisecond)
-		if response() == (int32)(commandID) || ctx.Err() != nil {
-			break
-		}
-	}
-
-	var resp int32
-	resp = response()
-
-	if resp != (int32)(commandID) {
-		log.Printf("Timed out reading command %d from guest (%d) \n", commandID, resp)
+	var resp RESP
+	
+	select {
+	case res := <-Chan:
+		resp = res
+	case <-time.After(15*time.Second):
+		atomic.StoreInt32(&WaitingFor, 0)
+		log.Printf("Timeout while reading command %d from guest \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no response"}`))
 		return
 	}
 
-	if resp == 6 { LastData = "null" }
+	atomic.StoreInt32(&WaitingFor, 0)
 
-	if LastData == "" {
+	if resp.id != (int32)(commandID) {
+		log.Printf("Received wrong response for command %d from guest: %d \n", commandID, resp.id)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"status": "error", "data": null, "message": "Received wrong response"}`))
+		return
+	}
+
+	if resp.id == 6 { resp.data = "null" }
+
+	if resp.data == "" {
 		log.Printf("Received no data for command %d \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no data"}`))
@@ -306,7 +324,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status": "success", "data": ` + LastData + `, "message": null}`))
+	w.Write([]byte(`{"status": "success", "data": ` + resp.data + `, "message": null}`))
 	return
 }
 
@@ -316,6 +334,12 @@ func write(w http.ResponseWriter, r *http.Request) {
 
 	Writer.Lock()
 	defer Writer.Unlock()
+
+	if Connection == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"status": "error", "data": null, "message": "No connection to guest"}`))
+		return
+	}
 
 	var err error
 	var commandID int
@@ -372,9 +396,9 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 
 	//fmt.Printf("Writing command %d\n", CommandID)
 
-	if LastConnection == nil { return false }
+	if Connection == nil { return false }
 
-	_, err := LastConnection.Write(buf)
+	_, err := Connection.Write(buf)
 
 	if err != nil {
 		log.Println("Write error:", err.Error())
@@ -382,10 +406,6 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	}
 
 	return true
-}
-
-func response() int32 {
-	return atomic.LoadInt32(&LastResponse)
 }
 
 func uuid() string {
