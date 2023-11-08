@@ -100,11 +100,11 @@ func incoming_conn(conn net.Conn) {
 		buf := make([]byte, 4096)
 		len, err := conn.Read(buf)
 		if err != nil {
-			log.Println("Error on read:", err.Error())
+			log.Println("Read error:", err.Error())
 			return
 		}
 		if len != 4096 {
-			log.Printf("Read %d Bytes, not 4096\n", len)
+			log.Printf("Read error: Read %d Bytes, not 4096\n", len)
 			// Something wrong, close and wait for reconnect
 			conn.Close()
 			return
@@ -228,7 +228,13 @@ func process_req(buf []byte, conn net.Conn) {
 		// full fill 4096
 		buf = make([]byte, 4096, 4096)
 		copy(buf, res)
-		conn.Write(buf)
+
+		_, err := conn.Write(buf)
+
+		if err != nil {
+			log.Println("Write error:", err.Error())
+			return
+		}
 	}
 }
 
@@ -368,9 +374,14 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 
 	if LastConnection == nil { return false }
 
-	LastConnection.Write(buf)
-	return true
+	_, err := LastConnection.Write(buf)
 
+	if err != nil {
+		log.Println("Write error:", err.Error())
+		return false
+	}
+
+	return true
 }
 
 func response() int32 {
@@ -406,7 +417,7 @@ func path() string {
 	exePath, err := os.Executable() // Get the executable file's path
 
 	if err != nil {
-		log.Println("Exec error:", err)
+		log.Println("Path error:", err)
 		return ""
 	}
 
