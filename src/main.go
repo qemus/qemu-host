@@ -39,12 +39,13 @@ type RESP struct {
 	data string
 }
 
-var Executed bool
 var Chan chan RESP
 var WaitingFor int32
 var Writer sync.Mutex
 var Reader sync.Mutex
 var Connection net.Conn
+var Executed atomic.Bool
+var Shutdown atomic.Bool
 
 var GuestCPUs = flag.Int("cpu", 1, "Number of CPU cores")
 var VmVersion = flag.String("version", "2.6.5-12202", "VM Version")
@@ -98,17 +99,22 @@ func main() {
 func incoming_conn(conn net.Conn) {
 
 	Connection = conn
+	Executed.Store(false)
+	Shutdown.Store(false)
+
 	if Chan == nil { Chan = make(chan RESP, 1) }
 
 	for {
 		buf := make([]byte, 4096)
 		len, err := conn.Read(buf)
 		if err != nil {
-			log.Println("Read error:", err.Error())
-			return
+			if !Shutdown.Load() {
+				log.Println("Read error:", err.Error())
+			}
+			if len != 4096 { return }
 		}
 		if len != 4096 {
-			log.Printf("Read error: Read %d Bytes, not 4096\n", len)
+			log.Printf("Read error: Received %d Bytes, not 4096\n", len)
 			// Something wrong, close and wait for reconnect
 			conn.Close()
 			return
@@ -155,6 +161,7 @@ func process_req(buf []byte, conn net.Conn) {
 		data = string(buf[64 : 64+req.ReqLength])
 	} else if req.IsResp == 1 {
 		data = string(buf[64 : 64+req.RespLength])
+	
 		if req.CommandID == atomic.LoadInt32(&WaitingFor) {
 			atomic.StoreInt32(&WaitingFor, 0)
 			var resp RESP
@@ -313,7 +320,10 @@ func read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if resp.id == 6 { resp.data = "null" }
+	if resp.id == 6 {
+		resp.data = "null"
+		Shutdown.Store(true)
+	}
 
 	if resp.data == "" {
 		log.Printf("Received no data for command %d \n", commandID)
@@ -422,8 +432,8 @@ func uuid() string {
 
 func run_once() {
 
-	if !Executed {
-		Executed = true
+	if !Executed.Load() {
+		Executed.Store(true)
 		var file string
 		file = path() + "/print.sh"
 		if exists(file) { execute(file, nil) }
