@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"fmt"
 	"log"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+        "os/exec"
 	"net/http"
 	"encoding/binary"
 	mrand "math/rand"
@@ -69,14 +71,14 @@ func main() {
 		return
 	}
 
-	log.Println("Start listen on " + *ListenAddr)
+	fmt.Println("Start listen on " + *ListenAddr)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Println("Error on accept", err.Error())
 		} else {
-			log.Printf("New connection from %s\n", conn.RemoteAddr().String())
+			fmt.Printf("New connection from %s\n", conn.RemoteAddr().String())
 
 			go incoming_conn(conn)
 		}
@@ -101,7 +103,7 @@ func incoming_conn(conn net.Conn) {
 			return
 		}
 		go process_req(buf, conn)
-		//log.Printf("Read %d Bytes\n%#v\n", len, string(buf[:len]))
+		//fmt.Printf("Read %d Bytes\n%#v\n", len, string(buf[:len]))
 	}
 }
 
@@ -142,8 +144,8 @@ func process_req(buf []byte, conn net.Conn) {
 		LastResponse = (int)(req.CommandID)
 	}
 
-	log.Printf("Command: %s [%d]\n", commandsName[int(req.CommandID)], int(req.CommandID))
-	if data != "" { log.Printf("Info: %s\n", data) }
+	fmt.Printf("Command: %s [%d]\n", commandsName[int(req.CommandID)], int(req.CommandID))
+	if data != "" { fmt.Printf("Info: %s\n", data) }
 
 	// Hard code of command
 	switch req.CommandID {
@@ -204,7 +206,7 @@ func process_req(buf []byte, conn net.Conn) {
 		req.IsReq = 0
 		req.ReqLength = 0
 		req.RespLength = int32(len([]byte(data)) + 1)
-		log.Printf("Response data: %s\n", data)
+		fmt.Printf("Response data: %s\n", data)
 
 		// write to buf
 		binary.Write(writer, binary.LittleEndian, &req)
@@ -342,7 +344,7 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	buf = make([]byte, 4096, 4096)
 	copy(buf, res)
 
-	//log.Printf("Writing command %d\n", CommandID)
+	//fmt.Printf("Writing command %d\n", CommandID)
 
 	if LastConnection == nil { return false }
 
@@ -362,4 +364,23 @@ func uuid() string {
 	}
 
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%12x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+func execute(script string, command []string) (bool) {
+
+    cmd := &exec.Cmd{
+        Path:   script,
+        Args:   command,
+        Stdout: os.Stdout,
+        Stderr: os.Stderr,
+    }
+
+    err := cmd.Start()
+	
+    if err != nil {
+	log.Println("Cannot execute", err.Error())
+        return false
+    }
+
+    return true
 }
