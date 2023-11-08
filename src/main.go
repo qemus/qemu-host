@@ -9,7 +9,6 @@ import (
 	"flag"
 	"sync"
 	"bytes"
-	"context"
 	"strconv"
 	"strings"
         "os/exec"
@@ -36,8 +35,8 @@ type REQ struct {
 }
 
 type RESP struct {
-    id int32
-    data string
+	id   int32
+	data string
 }
 
 var Executed bool
@@ -293,11 +292,11 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp RESP
-	
+
 	select {
 	case res := <-Chan:
 		resp = res
-	case <-time.After(15*time.Second):
+	case <-time.After(15 * time.Second):
 		atomic.StoreInt32(&WaitingFor, 0)
 		log.Printf("Timeout while reading command %d from guest \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -446,7 +445,7 @@ func path() string {
 	return dirPath
 }
 
-func exists(name string) (bool) {
+func exists(name string) bool {
 
 	_, err := os.Stat(name)
 
