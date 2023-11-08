@@ -74,7 +74,7 @@ func main() {
 	listener, err := net.Listen("tcp", *ListenAddr)
 
 	if err != nil {
-		log.Fatalln("Error listening", err.Error())
+		log.Fatalln("Error listening:", err.Error())
 		return
 	}
 
@@ -83,7 +83,7 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("Error on accept", err.Error())
+			log.Println("Error on accept:", err.Error())
 		} else {
 			fmt.Printf("New connection from %s\n", conn.RemoteAddr().String())
 
@@ -100,7 +100,7 @@ func incoming_conn(conn net.Conn) {
 		buf := make([]byte, 4096)
 		len, err := conn.Read(buf)
 		if err != nil {
-			log.Println("Error on read", err.Error())
+			log.Println("Error on read:", err.Error())
 			return
 		}
 		if len != 4096 {
@@ -143,7 +143,7 @@ func process_req(buf []byte, conn net.Conn) {
 
 	err := binary.Read(bytes.NewReader(buf), binary.LittleEndian, &req)
 	if err != nil {
-		log.Printf("Error on decode %s\n", err)
+		log.Printf("Error on decode: %s\n", err)
 		return
 	}
 
@@ -383,7 +383,7 @@ func uuid() string {
 	_, err := crand.Read(b)
 
 	if err != nil {
-		log.Println("Error on uuid", err.Error())
+		log.Println("Error on uuid:", err.Error())
 		return "aa00bc73-4772-4fda-b134-c737485ff084"
 	}
 
@@ -406,7 +406,7 @@ func path() string {
 	exePath, err := os.Executable() // Get the executable file's path
 
 	if err != nil {
-		log.Println("Error", err)
+		log.Println("Exec error:", err)
 		return ""
 	}
 
@@ -434,7 +434,7 @@ func execute(script string, command []string) bool {
 	err := cmd.Start()
 
 	if err != nil {
-		log.Println("Cannot run", err.Error())
+		log.Println("Cannot run:", err.Error())
 		return false
 	}
 
