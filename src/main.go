@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 	"flag"
+	"sync"
 	"bytes"
 	"context"
 	"strconv"
@@ -50,6 +51,7 @@ var ClusterUUID = flag.String("clusteruuid", uuid(), "Cluster UUID")
 var ApiPort = flag.String("api", ":2210", "API port")
 var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
 
+var Lock sync.Mutex
 var LastData string
 var LastResponse int32
 var LastConnection net.Conn
@@ -128,6 +130,7 @@ var commandsName = map[int]string{
 }
 
 func process_req(buf []byte, conn net.Conn) {
+
 	var req REQ
 	var data string
 
@@ -230,12 +233,15 @@ func home(w http.ResponseWriter, r *http.Request) {
 func read(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-
-	var err error
-	var commandID int
-
+	
+        Lock.Lock()
+        defer Lock.Unlock()
+	
 	LastData = ""
         atomic.StoreInt32(&LastResponse, 0)
+	
+	var err error
+	var commandID int
 	
 	query := r.URL.Query()
 	commandID, err = strconv.Atoi(query.Get("command"))
@@ -292,7 +298,10 @@ func read(w http.ResponseWriter, r *http.Request) {
 func write(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-
+	
+        Lock.Lock()
+        defer Lock.Unlock()
+	
 	var err error
 	var commandID int
 
