@@ -13,6 +13,7 @@ import (
 	"strings"
         "os/exec"
 	"net/http"
+	"sync/atomic"
 	"encoding/binary"
 	mrand "math/rand"
         crand "crypto/rand"
@@ -50,7 +51,7 @@ var ApiPort = flag.String("api", ":2210", "API port")
 var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
 
 var LastData string
-var LastResponse int
+var LastResponse int32
 var LastConnection net.Conn
 
 func main() {
@@ -141,7 +142,7 @@ func process_req(buf []byte, conn net.Conn) {
 	} else if req.IsResp == 1 {
 		data = string(buf[64 : 64+req.RespLength])
 		LastData = strings.Replace(data, "\x00", "", -1)
-		LastResponse = (int)(req.CommandID)
+                atomic.StoreInt32(&LastResponse, req.CommandID)
 	}
 
 	fmt.Printf("Command: %s [%d]\n", commandsName[int(req.CommandID)], int(req.CommandID))
@@ -234,8 +235,8 @@ func read(w http.ResponseWriter, r *http.Request) {
 	var commandID int
 
 	LastData = ""
-	LastResponse = 0
-
+        atomic.StoreInt32(&LastResponse, 0)
+	
 	query := r.URL.Query()
 	commandID, err = strconv.Atoi(query.Get("command"))
 
@@ -246,9 +247,9 @@ func read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Reading command: %d \n", commandID)
+	fmt.Printf("Reading command: %d \n", commandID)
 
-	if send_command((int32)(commandID), 1, 1) == false {
+	if !send_command((int32)(commandID), 1, 1) {
 		log.Printf("Failed reading command %d from guest \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Failed to read command"}`))
@@ -259,21 +260,22 @@ func read(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	for {
 		time.Sleep(100 * time.Millisecond)
-		if LastResponse == commandID || ctx.Err() != nil {
+		if response() == commandID || ctx.Err() != nil {
 			break
 		}
 	}
 
-	if LastResponse != commandID {
-		log.Printf("Timed out reading command %d from guest (%d) \n", commandID, LastResponse)
+	var resp int32
+	resp = response()
+	
+	if resp != commandID {
+		log.Printf("Timed out reading command %d from guest (%d) \n", commandID, resp)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no response"}`))
 		return
 	}
 
-	if LastResponse == 6 {
-		LastData = "null"
-	}
+	if resp == 6 { LastData = "null" }
 
 	if LastData == "" {
 		log.Printf("Received no data for command %d \n", commandID)
@@ -304,9 +306,9 @@ func write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Sending command: %d \n", commandID)
+	fmt.Printf("Sending command: %d \n", commandID)
 
-	if send_command((int32)(commandID), 1, 0) == false {
+	if !send_command((int32)(commandID), 1, 0) {
 		log.Printf("Failed sending command %d to guest \n", commandID)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Failed to send command"}`))
@@ -351,6 +353,10 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	LastConnection.Write(buf)
 	return true
 
+}
+
+func response() int32 {
+    return atomic.LoadInt32(&LastResponse)
 }
 
 func uuid() string {
