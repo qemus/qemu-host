@@ -15,6 +15,7 @@ import (
         "os/exec"
 	"net/http"
 	"sync/atomic"
+	"path/filepath"
 	"encoding/binary"
 	mrand "math/rand"
         crand "crypto/rand"
@@ -51,7 +52,10 @@ var ClusterUUID = flag.String("clusteruuid", uuid(), "Cluster UUID")
 var ApiPort = flag.String("api", ":2210", "API port")
 var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
 
-var Lock sync.Mutex
+var Executed bool
+var Writer sync.Mutex
+var Reader sync.Mutex
+
 var LastData string
 var LastResponse int32
 var LastConnection net.Conn
@@ -131,6 +135,9 @@ var commandsName = map[int]string{
 
 func process_req(buf []byte, conn net.Conn) {
 
+	Reader.Lock()
+	defer Reader.Unlock()
+
 	var req REQ
 	var data string
 
@@ -145,7 +152,7 @@ func process_req(buf []byte, conn net.Conn) {
 	} else if req.IsResp == 1 {
 		data = string(buf[64 : 64+req.RespLength])
 		LastData = strings.Replace(data, "\x00", "", -1)
-                atomic.StoreInt32(&LastResponse, req.CommandID)
+		atomic.StoreInt32(&LastResponse, req.CommandID)
 	}
 
 	fmt.Printf("Command: %s [%d]\n", commandsName[int(req.CommandID)], int(req.CommandID))
@@ -179,9 +186,11 @@ func process_req(buf []byte, conn net.Conn) {
 	case 11:
 		// Guest UUID
 		data = *GuestUUID
+		run_once()
 	case 12:
 		// Cluster UUID
 		data = *ClusterUUID
+		run_once()
 	case 13:
 		// Host SN
 		data = *HostSN
@@ -202,7 +211,7 @@ func process_req(buf []byte, conn net.Conn) {
 		return
 	}
 
-	// if it's a req and need response
+	// if it's a req and need a response
 	if req.IsReq == 1 && req.NeedResponse == 1 {
 		buf = make([]byte, 0, 4096)
 		writer := bytes.NewBuffer(buf)
@@ -233,16 +242,16 @@ func home(w http.ResponseWriter, r *http.Request) {
 func read(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-	
-        Lock.Lock()
-        defer Lock.Unlock()
-	
+
+	Writer.Lock()
+	defer Writer.Unlock()
+
 	LastData = ""
-        atomic.StoreInt32(&LastResponse, 0)
-	
+	atomic.StoreInt32(&LastResponse, 0)
+
 	var err error
 	var commandID int
-	
+
 	query := r.URL.Query()
 	commandID, err = strconv.Atoi(query.Get("command"))
 
@@ -266,15 +275,15 @@ func read(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	for {
 		time.Sleep(100 * time.Millisecond)
-		if response() == commandID || ctx.Err() != nil {
+		if response() == (int32)(commandID) || ctx.Err() != nil {
 			break
 		}
 	}
 
 	var resp int32
 	resp = response()
-	
-	if resp != commandID {
+
+	if resp != (int32)(commandID) {
 		log.Printf("Timed out reading command %d from guest (%d) \n", commandID, resp)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no response"}`))
@@ -298,10 +307,10 @@ func read(w http.ResponseWriter, r *http.Request) {
 func write(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-	
-        Lock.Lock()
-        defer Lock.Unlock()
-	
+
+	Writer.Lock()
+	defer Writer.Unlock()
+
 	var err error
 	var commandID int
 
@@ -365,7 +374,7 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 }
 
 func response() int32 {
-    return atomic.LoadInt32(&LastResponse)
+	return atomic.LoadInt32(&LastResponse)
 }
 
 func uuid() string {
@@ -381,21 +390,61 @@ func uuid() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%12x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-func execute(script string, command []string) (bool) {
+func run_once() {
 
-    cmd := &exec.Cmd{
-        Path:   script,
-        Args:   command,
-        Stdout: os.Stdout,
-        Stderr: os.Stderr,
+	if !Executed {
+		Executed = true
+		var file string
+		file = path() + "/print.sh"
+		if exists(file) { execute(file, nil) }
+	}
+
+}
+
+func path() string {
+
+	exePath, err := os.Executable() // Get the executable file's path
+
+	if err != nil {
+		log.Println("Error", err)
+		return ""
+	}
+
+	dirPath := filepath.Dir(exePath) // Get the directory of the executable file
+
+	return dirPath
+}
+
+func exists(name string) (bool, error) {
+
+    _, err := os.Stat(name)
+
+    if err == nil {
+        return true, nil
     }
 
-    err := cmd.Start()
-	
-    if err != nil {
-	log.Println("Cannot execute", err.Error())
-        return false
+    if errors.Is(err, os.ErrNotExist) {
+        return false, nil
     }
 
-    return true
+    return false, err
+}
+
+func execute(script string, command []string) bool {
+
+	cmd := &exec.Cmd{
+		Path:   script,
+		Args:   command,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+	}
+
+	err := cmd.Start()
+
+	if err != nil {
+		log.Println("Cannot run", err.Error())
+		return false
+	}
+
+	return true
 }
