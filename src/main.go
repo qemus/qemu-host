@@ -290,7 +290,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 
 	for len(Chan) > 0 {
 		log.Printf("Warning: channel was not empty?")
-		_ := <-Chan
+		<-Chan
 	}
 
 	fmt.Printf("Reading command: %d \n", commandID)
