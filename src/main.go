@@ -72,6 +72,7 @@ func main() {
 
 	go http.ListenAndServe(*ApiPort, router)
 
+	Chan = make(chan RESP, 1)
 	listener, err := net.Listen("tcp", *ListenAddr)
 
 	if err != nil {
@@ -96,10 +97,6 @@ func main() {
 func incoming_conn(conn net.Conn) {
 
 	Connection = conn
-	Executed.Store(false)
-	Shutdown.Store(false)
-
-	if Chan == nil { Chan = make(chan RESP, 1) }
 
 	for {
 		buf := make([]byte, 4096)
@@ -155,11 +152,16 @@ func process_req(buf []byte, conn net.Conn) {
 	}
 
 	if req.IsReq == 1 {
-		data = string(buf[64 : 64+req.ReqLength])
-	} else if req.IsResp == 1 {
-		data = string(buf[64 : 64+req.RespLength])
 	
-		if req.CommandID == atomic.LoadInt32(&WaitingFor) {
+		data = string(buf[64 : 64+req.ReqLength])
+		if req.CommandID == 3 { Executed.Store(false) }
+	
+	} else if req.IsResp == 1 {
+	
+		data = string(buf[64 : 64+req.RespLength])
+		if req.CommandID == 6 { Shutdown.Store(true) }
+	
+		if req.CommandID != 0 && req.CommandID == atomic.LoadInt32(&WaitingFor) {
 			atomic.StoreInt32(&WaitingFor, 0)
 			var resp RESP
 			resp.id = req.CommandID
@@ -286,6 +288,11 @@ func read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(Chan) > 0 {
+		log.Printf("Warning: channel was not empty?")
+		dummy := <-Chan
+	}
+
 	fmt.Printf("Reading command: %d \n", commandID)
 	atomic.StoreInt32(&WaitingFor, (int32)(commandID))
 
@@ -319,10 +326,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if resp.id == 6 {
-		resp.data = "null"
-		Shutdown.Store(true)
-	}
+	if resp.id == 6 { resp.data = "null" }
 
 	if resp.data == "" {
 		log.Printf("Received no data for command %d \n", commandID)
