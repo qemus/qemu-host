@@ -207,11 +207,11 @@ func process_resp(req REQ, input string, conn net.Conn) {
 		// Guest Info
 	case 11:
 		// Guest UUID
-		data = uuid(md5.Sum([]byte(*GuestSN)))
+		data = uuid(md5.Sum([]byte("g" + *GuestSN)))
 		run_once()
 	case 12:
 		// Cluster UUID
-		data = uuid(md5.Sum([]byte(*HostSN)))
+		data = uuid(md5.Sum([]byte("h" + *HostSN)))
 		run_once()
 	case 13:
 		// Host SN
