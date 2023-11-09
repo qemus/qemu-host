@@ -144,6 +144,7 @@ func process_req(buf []byte, conn net.Conn) {
 
 	var req REQ
 	var data string
+	var title string
 
 	err := binary.Read(bytes.NewReader(buf), binary.LittleEndian, &req)
 	if err != nil {
@@ -153,11 +154,13 @@ func process_req(buf []byte, conn net.Conn) {
 
 	if req.IsReq == 1 {
 	
+		title = "Request"
 		data = string(buf[64 : 64+req.ReqLength])
 		if req.CommandID == 3 { Executed.Store(false) }
-	
+
 	} else if req.IsResp == 1 {
 	
+		title = "Response"
 		data = string(buf[64 : 64+req.RespLength])
 		if req.CommandID == 6 { Shutdown.Store(true) }
 	
@@ -170,8 +173,7 @@ func process_req(buf []byte, conn net.Conn) {
 		}
 	}
 
-	fmt.Printf("Command: %s [%d]\n", commandsName[int(req.CommandID)], int(req.CommandID))
-	if strings.Replace(data, "\x00", "", -1) != "" { fmt.Printf("Info: %s\n", strings.Replace(data, "\x00", "", -1)) }
+	fmt.Printf("%s: %s [%d] %s \n", title, commandsName[int(req.CommandID)], int(req.CommandID), strings.Replace(data, "\x00", "", -1))
 
 	// if it's a req and need a response
 	if req.IsReq == 1 && req.NeedResponse == 1 {
@@ -241,7 +243,7 @@ func process_resp(req REQ, input string, conn net.Conn) {
 	req.IsResp = 1
 	req.ReqLength = 0
 	req.RespLength = int32(len([]byte(data)) + 1)
-	if data != "" { fmt.Printf("Response data: %s\n", data) }
+	fmt.Printf("Replied: [%d] %s \n", int(req.CommandID), data)
 
 	// write to buf
 	binary.Write(writer, binary.LittleEndian, &req)
