@@ -154,7 +154,7 @@ func process_req(buf []byte, conn net.Conn) {
 
 	if req.IsReq == 1 {
 	
-		title = "Request"
+		title = "Received"
 		data = string(buf[64 : 64+req.ReqLength])
 		if req.CommandID == 3 { Executed.Store(false) }
 
@@ -243,7 +243,7 @@ func process_resp(req REQ, input string, conn net.Conn) {
 	req.IsResp = 1
 	req.ReqLength = 0
 	req.RespLength = int32(len([]byte(data)) + 1)
-	fmt.Printf("Replied: [%d] %s \n", int(req.CommandID), data)
+	fmt.Printf("Replied: %s [%d] \n", data, int(req.CommandID))
 
 	// write to buf
 	binary.Write(writer, binary.LittleEndian, &req)
@@ -295,7 +295,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 		<-Chan
 	}
 
-	fmt.Printf("Reading command: %d \n", commandID)
+	fmt.Printf("Request: %s [%d] \n", commandsName[commandID], commandID)
 	atomic.StoreInt32(&WaitingFor, (int32)(commandID))
 
 	if !send_command((int32)(commandID), 1, 1) {
@@ -365,7 +365,7 @@ func write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Sending command: %d \n", commandID)
+	fmt.Printf("Command: %s [%d] \n", commandsName[commandID], commandID)
 
 	if !send_command((int32)(commandID), 1, 0) {
 		log.Printf("Failed sending command %d to guest \n", commandID)
