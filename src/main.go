@@ -13,11 +13,11 @@ import (
 	"strings"
         "os/exec"
 	"net/http"
+	"math/rand"
+	"crypto/md5"
 	"sync/atomic"
 	"path/filepath"
 	"encoding/binary"
-	mrand "math/rand"
-        crand "crypto/rand"
 )
 
 type REQ struct {
@@ -57,9 +57,6 @@ var HostMAC = flag.String("mac", "00:00:00:00:00:00", "Host MAC address")
 var HostSN = flag.String("hostsn", "0000000000000", "Host serial number")
 var GuestSN = flag.String("guestsn", "0000000000000", "Guest serial number")
 var GuestCPU_ARCH = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
-
-var GuestUUID = flag.String("guestuuid", uuid(), "Guest UUID")
-var ClusterUUID = flag.String("clusteruuid", uuid(), "Cluster UUID")
 
 var ApiPort = flag.String("api", ":2210", "API port")
 var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
@@ -210,11 +207,11 @@ func process_resp(req REQ, input string, conn net.Conn) {
 		// Guest Info
 	case 11:
 		// Guest UUID
-		data = *GuestUUID
+		data = uuid(md5.Sum([]byte(*GuestSN)))
 		run_once()
 	case 12:
 		// Cluster UUID
-		data = *ClusterUUID
+		data = uuid(md5.Sum([]byte(*HostSN)))
 		run_once()
 	case 13:
 		// Host SN
@@ -388,7 +385,7 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	req.ReqLength = 0
 	req.RespLength = 0
 	req.GuestID = 10000000
-	req.RandID = mrand.Int63()
+	req.RandID = rand.Int63()
 	req.NeedResponse = needsResp
 
 	var buf = make([]byte, 0, 4096)
@@ -416,16 +413,7 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	return true
 }
 
-func uuid() string {
-
-	b := make([]byte, 16)
-	_, err := crand.Read(b)
-
-	if err != nil {
-		log.Println("Error on uuid:", err.Error())
-		return "aa00bc73-4772-4fda-b134-c737485ff084"
-	}
-
+func uuid(b [16]byte) string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%12x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
