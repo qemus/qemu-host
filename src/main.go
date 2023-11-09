@@ -288,9 +288,9 @@ func read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(Chan) > 0 {
+	for len(Chan) > 0 {
 		log.Printf("Warning: channel was not empty?")
-		dummy := <-Chan
+		_ := <-Chan
 	}
 
 	fmt.Printf("Reading command: %d \n", commandID)
