@@ -13,8 +13,12 @@ on:
       - '.github/workflows/**'
       
 jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/test.yml
   build:
     name: Build
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       packages: write
