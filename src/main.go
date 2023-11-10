@@ -184,7 +184,8 @@ func process_req(buf []byte, conn net.Conn) {
 		}
 	}
 
-	fmt.Printf("%s: %s [%d] %s \n", title, commandsName[int(req.CommandID)], int(req.CommandID), strings.Replace(data, "\x00", "", -1))
+	fmt.Printf("%s: %s [%d] %s \n", title, commandsName[int(req.CommandID)],
+						int(req.CommandID), strings.Replace(data, "\x00", "", -1))
 
 	// if it's a req and need a response
 	if req.IsReq == 1 && req.NeedResponse == 1 {
@@ -199,7 +200,8 @@ func process_resp(req REQ, conn net.Conn) {
 	switch req.CommandID {
 	case 4:
 		// Host version
-		data = fmt.Sprintf(`{"buildnumber":%d,"smallfixnumber":%d}`, *HostBuildNumber, *HostFixNumber)
+		data = fmt.Sprintf(`{"buildnumber":%d,"smallfixnumber":%d}`,
+			*HostBuildNumber, *HostFixNumber)
 	case 5:
 		// Guest SN
 		data = *GuestSN
@@ -233,39 +235,29 @@ func process_resp(req REQ, conn net.Conn) {
 		data = "9223372036854775807"
 	}
 
-	if data == "" && req.CommandID != 10 {
-		log.Printf("No handler available for command: %d\n", req.CommandID)
-	}
-
-	buf := make([]byte, 0, 4096)
-	writer := bytes.NewBuffer(buf)
-
 	req.IsReq = 0
 	req.IsResp = 1
 	req.ReqLength = 0
+	req.RespLength = 0
 	req.NeedResponse = 0
-	req.RespLength = int32(len([]byte(data)) + 1)
+
+	if data != "" {
+		req.RespLength = int32(len([]byte(data)) + 1)
+	} else if req.CommandID != 10 {
+		log.Printf("No handler available for command: %d\n", req.CommandID)
+	}
 
 	fmt.Printf("Replied: %s [%d] \n", data, int(req.CommandID))
 
-	// write to buf
-	logw(binary.Write(writer, binary.LittleEndian, &req))
-
-	writer.Write([]byte(data))
-	res := writer.Bytes()
-
-	// full fill 4096
-	buf = make([]byte, 4096)
-	copy(buf, res)
-
-	logerr(conn.Write(buf))
+	logerr(conn.Write(packet(req, data)))
 }
 
 func fail(w http.ResponseWriter, msg string) {
 
 	log.Printf("API: " + msg)
+	msg = strings.Replace(msg, "\"", "", -1)
 	w.WriteHeader(http.StatusInternalServerError)
-	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + strings.Replace(msg, "\"", "", -1) + `"}`)))
+	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + msg + `"}`)))
 }
 
 func ok(w http.ResponseWriter, data string) {
@@ -371,6 +363,22 @@ func write(w http.ResponseWriter, r *http.Request) {
 	ok(w, "")
 }
 
+func packet(req REQ, data string) [4096]byte{
+
+	buf := make([]byte, 0, 4096)
+	writer := bytes.NewBuffer(buf)
+
+	// write to buf
+	logw(binary.Write(writer, binary.LittleEndian, &req))
+	if data != "" { writer.Write([]byte(data)) }
+
+	// full fill 4096
+	buf = make([]byte, 4096)
+	copy(buf, writer.Bytes())
+
+	return buf
+}
+
 func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 
 	var req REQ
@@ -387,21 +395,10 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	req.GuestUUID = guest_id()
 	req.NeedResponse = needsResp
 
-	buf := make([]byte, 0, 4096)
-	writer := bytes.NewBuffer(buf)
-
-	// write to buf
-	logw(binary.Write(writer, binary.LittleEndian, &req))
-	res := writer.Bytes()
-
-	// full fill 4096
-	buf = make([]byte, 4096)
-	copy(buf, res)
-
 	//fmt.Printf("Writing command %d\n", CommandID)
 
 	if Connection == nil { return false }
-	_, err := Connection.Write(buf)
+	_, err := Connection.Write(packet(req, ""))
 	if err == nil { return true }
 
 	log.Println("Write error:", err)
