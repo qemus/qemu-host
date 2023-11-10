@@ -190,18 +190,12 @@ func process_resp(req REQ, conn net.Conn) bool {
 	var data string
 
 	switch req.CommandID {
-	case 2:
-		// Guest Info
-	case 3:
-		// Guest start/reboot
 	case 4:
 		// Host version
 		data = fmt.Sprintf(`{"buildnumber":%d,"smallfixnumber":%d}`, *HostBuildNumber, *HostFixNumber)
 	case 5:
 		// Guest SN
 		data = *GuestSN
-	case 6:
-		// Guest shutdown
 	case 7:
 		// CPU info
 		data = fmt.Sprintf(`{"cpuinfo":"%s","vcpu_num":%d}`,
@@ -210,10 +204,6 @@ func process_resp(req REQ, conn net.Conn) bool {
 		// VM version
 		data = fmt.Sprintf(`{"id":"Virtualization","name":"Virtual Machine Manager","timestamp":%d,"version":"%s"}`,
 			*VmTimestamp, *VmVersion)
-	case 9:
-		// Version Info
-	case 10:
-		// Guest Info
 	case 11:
 		run_once()
 		// Guest UUID
@@ -234,15 +224,10 @@ func process_resp(req REQ, conn net.Conn) bool {
 	case 16:
 		// Update Dead line time, always 0x7fffffffffffffff
 		data = "9223372036854775807"
-	case 17:
-		// TimeStamp
-	default:
-		log.Printf("No handler for command: %d\n", req.CommandID)
-		return false
 	}
 
-	if data == "" {
-		fmt.Printf("No data returned for command: %d\n", req.CommandID)
+	if data == "" && req.CommandID != 10 {
+		log.Printf("No handler available for command: %d\n", req.CommandID)
 	}
 
 	buf := make([]byte, 0, 4096)
