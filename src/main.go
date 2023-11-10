@@ -42,7 +42,6 @@ type RESP struct {
 var Chan chan RESP
 var WaitingFor int32
 var Writer sync.Mutex
-var Reader sync.Mutex
 var Connection net.Conn
 var Executed atomic.Bool
 var Shutdown atomic.Bool
@@ -101,20 +100,27 @@ func incoming_conn(conn net.Conn) {
 	for {
 		buf := make([]byte, 4096)
 		len, err := conn.Read(buf)
+
 		if err != nil {
-			if !Shutdown.Load() {
+			if err != io.EOF && !Shutdown.Load() {
 				log.Println("Read error:", err.Error())
+			} else {
+				fmt.Println("Disconnected:", err.Error())
 			}
-			if len != 4096 { return }
+			if len != 4096 {
+				conn.Close()
+				return
+			}
 		}
+
 		if len != 4096 {
 			log.Printf("Read error: Received %d Bytes, not 4096\n", len)
 			// Something wrong, close and wait for reconnect
 			conn.Close()
 			return
 		}
-		go process_req(buf, conn)
-		//fmt.Printf("Read %d Bytes\n%#v\n", len, string(buf[:len]))
+
+		process_req(buf, conn)
 	}
 }
 
@@ -137,20 +143,18 @@ var commandsName = map[int]string{
 	17: "Guest Timestamp",
 }
 
-func process_req(buf []byte, conn net.Conn) {
-
-	Reader.Lock()
-	defer Reader.Unlock()
+func process_req(buf []byte, conn net.Conn) bool {
 
 	var req REQ
-	var data string
-	var title string
 
 	err := binary.Read(bytes.NewReader(buf), binary.LittleEndian, &req)
 	if err != nil {
 		log.Printf("Error on decode: %s\n", err)
-		return
+		return false
 	}
+
+	var data string
+	var title string
 
 	if req.IsReq == 1 {
 	
@@ -177,11 +181,13 @@ func process_req(buf []byte, conn net.Conn) {
 
 	// if it's a req and need a response
 	if req.IsReq == 1 && req.NeedResponse == 1 {
-		process_resp(req, data, conn)
+		return process_resp(req, data, conn)
 	}
+
+	return true
 }
 
-func process_resp(req REQ, input string, conn net.Conn) {
+func process_resp(req REQ, input string, conn net.Conn) bool {
 
 	var data string
 
@@ -211,12 +217,11 @@ func process_resp(req REQ, input string, conn net.Conn) {
 		// Guest Info
 	case 11:
 		// Guest UUID
-		data = uuid(md5.Sum([]byte("g" + *GuestSN)))
-		run_once()
+		data = uuid(guest_id())
 	case 12:
-		// Cluster UUID
-		data = uuid(md5.Sum([]byte("h" + *HostSN)))
 		run_once()
+		// Cluster UUID
+		data = uuid(host_id())
 	case 13:
 		// Host SN
 		data = *HostSN
@@ -234,37 +239,54 @@ func process_resp(req REQ, input string, conn net.Conn) {
 		// TimeStamp
 	default:
 		log.Printf("No handler for command: %d\n", req.CommandID)
-		return
+		return false
 	}
 
-	var buf = make([]byte, 0, 4096)
+	buf := make([]byte, 0, 4096)
 	writer := bytes.NewBuffer(buf)
+	
 	req.IsReq = 0
 	req.IsResp = 1
 	req.ReqLength = 0
+	req.NeedResponse = 0
 	req.RespLength = int32(len([]byte(data)) + 1)
+
 	fmt.Printf("Replied: %s [%d] \n", data, int(req.CommandID))
 
 	// write to buf
 	binary.Write(writer, binary.LittleEndian, &req)
 	writer.Write([]byte(data))
 	res := writer.Bytes()
+
 	// full fill 4096
 	buf = make([]byte, 4096, 4096)
 	copy(buf, res)
 
 	_, err := conn.Write(buf)
+	if err == nil { return true }
 
-	if err != nil {
-		log.Println("Write error:", err.Error())
-	}
+	log.Println("Write error:", err.Error())
+	return false
+}
+
+func err(w http.ResponseWriter, msg string) {
+
+	log.Printf("API: " + msg)
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write([]byte(`{"status": "error", "data": null, "message": "` + strings.Replace(msg, "\"", "", -1) + `"}`))
+}
+
+func ok(w http.ResponseWriter, data string) {
+
+	if data == "" { data = "null" }
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status": "success", "data": ` + data + `, "message": null}`))
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusInternalServerError)
-	w.Write([]byte(`{"status": "error", "data": null, "message": "No command specified"}`))
+	err(w, "No command specified")
 }
 
 func read(w http.ResponseWriter, r *http.Request) {
@@ -274,19 +296,16 @@ func read(w http.ResponseWriter, r *http.Request) {
 	Writer.Lock()
 	defer Writer.Unlock()
 
-	if Connection == nil || Chan == nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "No connection to guest"}`))
-		return
-	}
-
 	query := r.URL.Query()
 	commandID, err := strconv.Atoi(query.Get("command"))
 
 	if err != nil || commandID < 1 {
-		log.Printf("Failed parsing command %s \n", query.Get("command"))
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Invalid command ID"}`))
+		err(w, fmt.Sprintf("Failed to parse command %s \n", query.Get("command")))
+		return
+	}
+
+	if Connection == nil || Chan == nil {
+		err(w, "No connection to guest")
 		return
 	}
 
@@ -300,9 +319,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 
 	if !send_command((int32)(commandID), 1, 1) {
 		atomic.StoreInt32(&WaitingFor, 0)
-		log.Printf("Failed reading command %d from guest \n", commandID)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Failed to read command"}`))
+		err(w, fmt.Sprintf("Failed reading command %d from guest \n", commandID))
 		return
 	}
 
@@ -313,32 +330,23 @@ func read(w http.ResponseWriter, r *http.Request) {
 		resp = res
 	case <-time.After(15 * time.Second):
 		atomic.StoreInt32(&WaitingFor, 0)
-		log.Printf("Timeout while reading command %d from guest \n", commandID)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no response"}`))
+		err(w, fmt.Sprintf("Timeout while reading command %d from guest \n", commandID))
 		return
 	}
 
 	atomic.StoreInt32(&WaitingFor, 0)
 
 	if resp.id != (int32)(commandID) {
-		log.Printf("Received wrong response for command %d from guest: %d \n", commandID, resp.id)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Received wrong response"}`))
+		err(w, fmt.Sprintf("Received wrong response for command %d from guest: %d \n", commandID, resp.id))
 		return
 	}
 
-	if resp.id == 6 { resp.data = "null" }
-
-	if resp.data == "" {
-		log.Printf("Received no data for command %d \n", commandID)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Received no data"}`))
+	if resp.data == "" && resp.id != 6 {
+		err(w, fmt.Sprintf("Received no data for command %d \n", commandID))
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status": "success", "data": ` + resp.data + `, "message": null}`))
+	ok(w, resp.data)
 	return
 }
 
@@ -350,8 +358,7 @@ func write(w http.ResponseWriter, r *http.Request) {
 	defer Writer.Unlock()
 
 	if Connection == nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "No connection to guest"}`))
+		err(w, "No connection to guest")
 		return
 	}
 
@@ -359,23 +366,18 @@ func write(w http.ResponseWriter, r *http.Request) {
 	commandID, err := strconv.Atoi(query.Get("command"))
 
 	if err != nil || commandID < 1 {
-		log.Printf("Failed parsing command %s \n", query.Get("command"))
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Invalid command ID"}`))
+		err(w, fmt.Sprintf("Failed to parse command %s \n", query.Get("command")))
 		return
 	}
 
 	fmt.Printf("Command: %s [%d] \n", commandsName[commandID], commandID)
 
 	if !send_command((int32)(commandID), 1, 0) {
-		log.Printf("Failed sending command %d to guest \n", commandID)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"status": "error", "data": null, "message": "Failed to send command"}`))
+		err(w, fmt.Sprintf("Failed sending command %d to guest \n", commandID))
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status": "success", "data": null, "message": null}`))
+	ok(w, "")
 	return
 }
 
@@ -392,10 +394,11 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	req.RespLength = 0
 	req.GuestID = 10000000
 	req.RandID = rand.Int63()
+	req.GuestUUID = guest_id()
 	req.NeedResponse = needsResp
 
-	var buf = make([]byte, 0, 4096)
-	var writer = bytes.NewBuffer(buf)
+	buf := make([]byte, 0, 4096)
+	writer := bytes.NewBuffer(buf)
 
 	// write to buf
 	binary.Write(writer, binary.LittleEndian, &req)
@@ -408,15 +411,19 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	//fmt.Printf("Writing command %d\n", CommandID)
 
 	if Connection == nil { return false }
-
 	_, err := Connection.Write(buf)
+	if err == nil { return true }
 
-	if err != nil {
-		log.Println("Write error:", err.Error())
-		return false
-	}
+	log.Println("Write error:", err.Error())
+	return false
+}
 
-	return true
+func host_id() [16]byte {
+	return md5.Sum([]byte("h" + *HostSN))
+}
+
+func guest_id() [16]byte {
+	return md5.Sum([]byte("g" + *GuestSN))
 }
 
 func uuid(b [16]byte) string {
@@ -425,33 +432,25 @@ func uuid(b [16]byte) string {
 
 func run_once() {
 
-	if !Executed.Load() {
-		Executed.Store(true)
-		var file string
-		file = path() + "/print.sh"
-		if exists(file) { execute(file, nil) }
-	}
+	if Executed.Load() { return }
 
+	Executed.Store(true)
+	file := path() + "/print.sh"
+	if exists(file) { execute(file, nil) }
 }
 
 func path() string {
 
-	exePath, err := os.Executable() // Get the executable file's path
+	exePath, err := os.Executable()
+	if err == nil { return filepath.Dir(exePath) }
 
-	if err != nil {
-		log.Println("Path error:", err)
-		return ""
-	}
-
-	dirPath := filepath.Dir(exePath) // Get the directory of the executable file
-
-	return dirPath
+	log.Println("Path error:", err)
+	return ""
 }
 
 func exists(name string) bool {
 
 	_, err := os.Stat(name)
-
 	return err == nil
 }
 
@@ -465,11 +464,8 @@ func execute(script string, command []string) bool {
 	}
 
 	err := cmd.Start()
-
-	if err != nil {
-		log.Println("Cannot run:", err.Error())
-		return false
-	}
-
-	return true
+	if err == nil { return true }
+	
+	log.Println("Cannot run:", err.Error())
+	return false
 }
