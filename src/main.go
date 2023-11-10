@@ -46,17 +46,17 @@ type RESP struct {
 }
 
 type REQ struct {
-	RandID       int64
-	GuestUUID    [16]byte
-	GuestID      int64
-	IsReq        int32
-	IsResp       int32
+	RandID int64
+	GuestUUID[16] byte
+	GuestID int64
+	IsReq int32
+	IsResp int32
 	NeedResponse int32
-	ReqLength    int32
-	RespLength   int32
-	CommandID    int32
-	SubCommand   int32
-	Reserve      int32
+	ReqLength int32
+	RespLength int32
+	CommandID int32
+	SubCommand int32
+	Reserve int32
 }
 
 var Chan chan RESP
@@ -64,7 +64,6 @@ var WaitingFor int32
 var Writer sync.Mutex
 var Connection net.Conn
 var Executed atomic.Bool
-var Shutdown atomic.Bool
 
 var GuestCPUs = flag.Int("cpu", 1, "Number of CPU cores")
 var VmVersion = flag.String("version", "2.6.5-12202", "VM Version")
@@ -89,7 +88,7 @@ func main() {
 	listener, err := net.Listen("tcp", *ListenAddr)
 
 	if err != nil {
-		log.Println("Error listening:", err.Error())
+		log.Println("Error listening:", err)
 		return
 	}
 
@@ -100,7 +99,7 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("Error on accept:", err.Error())
+			log.Println("Error on accept:", err)
 			return
 		} else {
 			fmt.Printf("New connection from %s\n", conn.RemoteAddr().String())
@@ -134,10 +133,10 @@ func incoming_conn(conn net.Conn) {
 		len, err := conn.Read(buf)
 
 		if err != nil {
-			if err != io.EOF && !Shutdown.Load() {
-				log.Println("Read error:", err.Error())
+			if err != io.EOF {
+				log.Println("Read error:", err)
 			} else {
-				fmt.Println("Disconnected:", err.Error())
+				fmt.Println("Disconnected:", err)
 			}
 			if len != 4096 { return }
 		}
@@ -175,7 +174,6 @@ func process_req(buf []byte, conn net.Conn) {
 
 		title = "Response"
 		data = string(buf[64 : 64+req.RespLength])
-		if req.CommandID == 6 { Shutdown.Store(true) }
 
 		if req.CommandID != 0 && req.CommandID == atomic.LoadInt32(&WaitingFor) {
 			atomic.StoreInt32(&WaitingFor, 0)
@@ -406,7 +404,7 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	_, err := Connection.Write(buf)
 	if err == nil { return true }
 
-	log.Println("Write error:", err.Error())
+	log.Println("Write error:", err)
 	return false
 }
 
@@ -415,7 +413,7 @@ func logerr(n int, err error) {
 }
 
 func logw(err error) {
-    if err != nil { log.Println("Write failed:", err.Error()) }
+    if err != nil { log.Println("Write failed:", err) }
 }
 
 func host_id() [16]byte {
@@ -466,6 +464,6 @@ func execute(script string, command []string) bool {
 	err := cmd.Start()
 	if err == nil { return true }
 
-	log.Println("Cannot run:", err.Error())
+	log.Println("Cannot run:", err)
 	return false
 }
