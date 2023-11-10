@@ -12,7 +12,7 @@ import (
 	"bytes"
 	"strconv"
 	"strings"
-        "os/exec"
+	"os/exec"
 	"net/http"
 	"math/rand"
 	"crypto/md5"
@@ -247,7 +247,7 @@ func process_resp(req REQ, conn net.Conn) bool {
 	res := writer.Bytes()
 
 	// full fill 4096
-	buf = make([]byte, 4096, 4096)
+	buf = make([]byte, 4096)
 	copy(buf, res)
 
 	_, err := conn.Write(buf)
@@ -335,7 +335,6 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ok(w, resp.data)
-	return
 }
 
 func write(w http.ResponseWriter, r *http.Request) {
@@ -366,7 +365,6 @@ func write(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ok(w, "")
-	return
 }
 
 func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
@@ -393,7 +391,7 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	res := writer.Bytes()
 
 	// full fill 4096
-	buf = make([]byte, 4096, 4096)
+	buf = make([]byte, 4096)
 	copy(buf, res)
 
 	//fmt.Printf("Writing command %d\n", CommandID)
