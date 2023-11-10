@@ -240,7 +240,7 @@ func process_resp(req REQ, conn net.Conn) bool {
 		return false
 	}
 
-	if data = "" {
+	if data == "" {
 		fmt.Printf("No data returned for command: %d\n", req.CommandID)
 	}
 
