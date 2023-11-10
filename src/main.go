@@ -79,12 +79,14 @@ func main() {
 		return
 	}
 
+	defer listener.Close()
 	fmt.Println("Start listen on " + *ListenAddr)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Println("Error on accept:", err.Error())
+			return
 		} else {
 			fmt.Printf("New connection from %s\n", conn.RemoteAddr().String())
 
@@ -95,6 +97,7 @@ func main() {
 
 func incoming_conn(conn net.Conn) {
 
+	defer conn.Close()
 	Connection = conn
 
 	for {
@@ -108,15 +111,13 @@ func incoming_conn(conn net.Conn) {
 				fmt.Println("Disconnected:", err.Error())
 			}
 			if len != 4096 {
-				conn.Close()
 				return
 			}
 		}
 
 		if len != 4096 {
-			log.Printf("Read error: Received %d Bytes, not 4096\n", len)
 			// Something wrong, close and wait for reconnect
-			conn.Close()
+			log.Printf("Read error: Received %d Bytes, not 4096\n", len)
 			return
 		}
 
@@ -157,17 +158,17 @@ func process_req(buf []byte, conn net.Conn) bool {
 	var title string
 
 	if req.IsReq == 1 {
-	
+
 		title = "Received"
 		data = string(buf[64 : 64+req.ReqLength])
 		if req.CommandID == 3 { Executed.Store(false) }
 
 	} else if req.IsResp == 1 {
-	
+
 		title = "Response"
 		data = string(buf[64 : 64+req.RespLength])
 		if req.CommandID == 6 { Shutdown.Store(true) }
-	
+
 		if req.CommandID != 0 && req.CommandID == atomic.LoadInt32(&WaitingFor) {
 			atomic.StoreInt32(&WaitingFor, 0)
 			var resp RESP
@@ -244,7 +245,7 @@ func process_resp(req REQ, input string, conn net.Conn) bool {
 
 	buf := make([]byte, 0, 4096)
 	writer := bytes.NewBuffer(buf)
-	
+
 	req.IsReq = 0
 	req.IsResp = 1
 	req.ReqLength = 0
@@ -269,7 +270,7 @@ func process_resp(req REQ, input string, conn net.Conn) bool {
 	return false
 }
 
-func err(w http.ResponseWriter, msg string) {
+func fail(w http.ResponseWriter, msg string) {
 
 	log.Printf("API: " + msg)
 	w.WriteHeader(http.StatusInternalServerError)
@@ -286,7 +287,7 @@ func ok(w http.ResponseWriter, data string) {
 func home(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
-	err(w, "No command specified")
+	fail(w, "No command specified")
 }
 
 func read(w http.ResponseWriter, r *http.Request) {
@@ -300,12 +301,12 @@ func read(w http.ResponseWriter, r *http.Request) {
 	commandID, err := strconv.Atoi(query.Get("command"))
 
 	if err != nil || commandID < 1 {
-		err(w, fmt.Sprintf("Failed to parse command %s \n", query.Get("command")))
+		fail(w, fmt.Sprintf("Failed to parse command %s \n", query.Get("command")))
 		return
 	}
 
 	if Connection == nil || Chan == nil {
-		err(w, "No connection to guest")
+		fail(w, "No connection to guest")
 		return
 	}
 
@@ -319,7 +320,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 
 	if !send_command((int32)(commandID), 1, 1) {
 		atomic.StoreInt32(&WaitingFor, 0)
-		err(w, fmt.Sprintf("Failed reading command %d from guest \n", commandID))
+		fail(w, fmt.Sprintf("Failed reading command %d from guest \n", commandID))
 		return
 	}
 
@@ -330,19 +331,19 @@ func read(w http.ResponseWriter, r *http.Request) {
 		resp = res
 	case <-time.After(15 * time.Second):
 		atomic.StoreInt32(&WaitingFor, 0)
-		err(w, fmt.Sprintf("Timeout while reading command %d from guest \n", commandID))
+		fail(w, fmt.Sprintf("Timeout while reading command %d from guest \n", commandID))
 		return
 	}
 
 	atomic.StoreInt32(&WaitingFor, 0)
 
 	if resp.id != (int32)(commandID) {
-		err(w, fmt.Sprintf("Received wrong response for command %d from guest: %d \n", commandID, resp.id))
+		fail(w, fmt.Sprintf("Received wrong response for command %d from guest: %d \n", commandID, resp.id))
 		return
 	}
 
 	if resp.data == "" && resp.id != 6 {
-		err(w, fmt.Sprintf("Received no data for command %d \n", commandID))
+		fail(w, fmt.Sprintf("Received no data for command %d \n", commandID))
 		return
 	}
 
@@ -358,7 +359,7 @@ func write(w http.ResponseWriter, r *http.Request) {
 	defer Writer.Unlock()
 
 	if Connection == nil {
-		err(w, "No connection to guest")
+		fail(w, "No connection to guest")
 		return
 	}
 
@@ -366,14 +367,14 @@ func write(w http.ResponseWriter, r *http.Request) {
 	commandID, err := strconv.Atoi(query.Get("command"))
 
 	if err != nil || commandID < 1 {
-		err(w, fmt.Sprintf("Failed to parse command %s \n", query.Get("command")))
+		fail(w, fmt.Sprintf("Failed to parse command %s \n", query.Get("command")))
 		return
 	}
 
 	fmt.Printf("Command: %s [%d] \n", commandsName[commandID], commandID)
 
 	if !send_command((int32)(commandID), 1, 0) {
-		err(w, fmt.Sprintf("Failed sending command %d to guest \n", commandID))
+		fail(w, fmt.Sprintf("Failed sending command %d to guest \n", commandID))
 		return
 	}
 
@@ -465,7 +466,7 @@ func execute(script string, command []string) bool {
 
 	err := cmd.Start()
 	if err == nil { return true }
-	
+
 	log.Println("Cannot run:", err.Error())
 	return false
 }
