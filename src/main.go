@@ -84,13 +84,7 @@ func main() {
 
 	flag.Parse()
 
-	router := http.NewServeMux()
-	router.HandleFunc("/", home)
-	router.HandleFunc("/read", read)
-	router.HandleFunc("/write", write)
-
-	go http.ListenAndServe(*ApiPort, router)
-
+	go http_listener(*ApiPort)
 	Chan = make(chan RESP, 1)
 	listener, err := net.Listen("tcp", *ListenAddr)
 
@@ -100,6 +94,7 @@ func main() {
 	}
 
 	defer listener.Close()
+
 	fmt.Println("Start listen on " + *ListenAddr)
 
 	for {
@@ -112,6 +107,20 @@ func main() {
 
 			go incoming_conn(conn)
 		}
+	}
+}
+
+func http_listener(port string) {
+
+	router := http.NewServeMux()
+	router.HandleFunc("/", home)
+	router.HandleFunc("/read", read)
+	router.HandleFunc("/write", write)
+
+	err := http.ListenAndServe(port, router)
+
+	if err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Error listening: %s", err)
 	}
 }
 
@@ -185,7 +194,7 @@ func process_req(buf []byte, conn net.Conn) {
 	}
 }
 
-func process_resp(req REQ, conn net.Conn) bool {
+func process_resp(req REQ, conn net.Conn) {
 
 	var data string
 
@@ -242,7 +251,8 @@ func process_resp(req REQ, conn net.Conn) bool {
 	fmt.Printf("Replied: %s [%d] \n", data, int(req.CommandID))
 
 	// write to buf
-	binary.Write(writer, binary.LittleEndian, &req)
+	logw(binary.Write(writer, binary.LittleEndian, &req))
+	
 	writer.Write([]byte(data))
 	res := writer.Bytes()
 
@@ -250,25 +260,21 @@ func process_resp(req REQ, conn net.Conn) bool {
 	buf = make([]byte, 4096)
 	copy(buf, res)
 
-	_, err := conn.Write(buf)
-	if err == nil { return true }
-
-	log.Println("Write error:", err.Error())
-	return false
+	logerr(conn.Write(buf))
 }
 
 func fail(w http.ResponseWriter, msg string) {
 
 	log.Printf("API: " + msg)
 	w.WriteHeader(http.StatusInternalServerError)
-	w.Write([]byte(`{"status": "error", "data": null, "message": "` + strings.Replace(msg, "\"", "", -1) + `"}`))
+	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + strings.Replace(msg, "\"", "", -1) + `"}`)))
 }
 
 func ok(w http.ResponseWriter, data string) {
 
 	if data == "" { data = "null" }
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status": "success", "data": ` + data + `, "message": null}`))
+	logerr(w.Write([]byte(`{"status": "success", "data": ` + data + `, "message": null}`)))
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
@@ -387,7 +393,7 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 	writer := bytes.NewBuffer(buf)
 
 	// write to buf
-	binary.Write(writer, binary.LittleEndian, &req)
+	logw(binary.Write(writer, binary.LittleEndian, &req))
 	res := writer.Bytes()
 
 	// full fill 4096
@@ -402,6 +408,14 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 
 	log.Println("Write error:", err.Error())
 	return false
+}
+
+func logerr(n int, err error) {
+    logw(err)
+}
+
+func logw(err error) {
+    if err != nil { log.Println("Write failed:", err.Error()) }
 }
 
 func host_id() [16]byte {
