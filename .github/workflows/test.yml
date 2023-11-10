@@ -10,12 +10,19 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 1
-    - uses: WillAbides/setup-go-faster@v1.12.0
+        
+    - name: Set up Go
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.21.4        
-    - run: "go vet ./..."
-      env:
-        GOPATH: "/home/runner/work/qemu-host/qemu-host"
-    - uses: dominikh/staticcheck-action@v1.3.0
+        go-version: '1.21'
+
+    - name: Static check
+      uses: dominikh/staticcheck-action@v1.3.0
       with:
         version: "2023.1"
+        install-go: false
+        working-directory: src
+
+    - name: Run Go vet
+      run: go vet ./...
+      working-directory: src
