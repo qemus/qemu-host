@@ -1,0 +1,20 @@
+on: [workflow_dispatch]
+name: "Test"
+permissions: {}
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+    - uses: WillAbides/setup-go-faster@v1.12.0
+      with:
+        go-version: 1.21.4
+    - run: "go test ./..."
+    - run: "go vet ./..."
+    - uses: dominikh/staticcheck-action@v1.3.0
+      with:
+        version: "2023.1"
