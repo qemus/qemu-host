@@ -14,15 +14,22 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
+        cache: false
         go-version: '1.21'
-
-    - name: Static check
-      uses: dominikh/staticcheck-action@v1.3.0
-      with:
-        version: "2023.1.6"
-        install-go: false
-        working-directory: src
-
+        
     - name: Run Go vet
       run: go vet ./...
       working-directory: src
+      
+    - name: Run staticcheck
+      uses: dominikh/staticcheck-action@v1
+      with:
+        version: latest
+        install-go: false
+        working-directory: src
+      
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+          version: latest
+          working-directory: src
