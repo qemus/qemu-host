@@ -185,7 +185,7 @@ func process_req(buf []byte, conn net.Conn) {
 	}
 
 	fmt.Printf("%s: %s [%d] %s \n", title, commandsName[int(req.CommandID)],
-						int(req.CommandID), strings.Replace(data, "\x00", "", -1))
+		int(req.CommandID), strings.Replace(data, "\x00", "", -1))
 
 	// if it's a req and need a response
 	if req.IsReq == 1 && req.NeedResponse == 1 {
@@ -363,7 +363,7 @@ func write(w http.ResponseWriter, r *http.Request) {
 	ok(w, "")
 }
 
-func packet(req REQ, data string) [4096]byte{
+func packet(req REQ, data string) []byte {
 
 	buf := make([]byte, 0, 4096)
 	writer := bytes.NewBuffer(buf)
