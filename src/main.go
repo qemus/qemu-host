@@ -20,6 +20,30 @@ import (
 	"encoding/binary"
 )
 
+var commandsName = map[int]string{
+	2:  "Guest info",
+	3:  "Guest power",
+	4:  "Host version",
+	5:  "Guest SN",
+	6:  "Guest shutdown",
+	7:  "Guest CPU info",
+	8:  "VM version",
+	9:  "Host version",
+	10: "Get Guest Info",
+	11: "Guest UUID",
+	12: "Cluster UUID",
+	13: "Host SN",
+	14: "Host MAC",
+	15: "Host model",
+	16: "Update Deadline",
+	17: "Guest Timestamp",
+}
+
+type RESP struct {
+	id int32
+	data string
+}
+
 type REQ struct {
 	RandID       int64
 	GuestUUID    [16]byte
@@ -32,11 +56,6 @@ type REQ struct {
 	CommandID    int32
 	SubCommand   int32
 	Reserve      int32
-}
-
-type RESP struct {
-	id   int32
-	data string
 }
 
 var Chan chan RESP
@@ -75,7 +94,7 @@ func main() {
 	listener, err := net.Listen("tcp", *ListenAddr)
 
 	if err != nil {
-		log.Fatalln("Error listening:", err.Error())
+		log.Println("Error listening:", err.Error())
 		return
 	}
 
@@ -110,9 +129,7 @@ func incoming_conn(conn net.Conn) {
 			} else {
 				fmt.Println("Disconnected:", err.Error())
 			}
-			if len != 4096 {
-				return
-			}
+			if len != 4096 { return }
 		}
 
 		if len != 4096 {
@@ -125,33 +142,14 @@ func incoming_conn(conn net.Conn) {
 	}
 }
 
-var commandsName = map[int]string{
-	2:  "Guest info",
-	3:  "Guest power",
-	4:  "Host version",
-	5:  "Guest SN",
-	6:  "Guest shutdown",
-	7:  "Guest CPU info",
-	8:  "VM version",
-	9:  "Host version",
-	10: "Get Guest Info",
-	11: "Guest UUID",
-	12: "Cluster UUID",
-	13: "Host SN",
-	14: "Host MAC",
-	15: "Host model",
-	16: "Update Deadline",
-	17: "Guest Timestamp",
-}
-
-func process_req(buf []byte, conn net.Conn) bool {
+func process_req(buf []byte, conn net.Conn) {
 
 	var req REQ
 
 	err := binary.Read(bytes.NewReader(buf), binary.LittleEndian, &req)
 	if err != nil {
 		log.Printf("Error on decode: %s\n", err)
-		return false
+		return
 	}
 
 	var data string
@@ -182,13 +180,11 @@ func process_req(buf []byte, conn net.Conn) bool {
 
 	// if it's a req and need a response
 	if req.IsReq == 1 && req.NeedResponse == 1 {
-		return process_resp(req, data, conn)
+		process_resp(req, conn)
 	}
-
-	return true
 }
 
-func process_resp(req REQ, input string, conn net.Conn) bool {
+func process_resp(req REQ, conn net.Conn) bool {
 
 	var data string
 
@@ -210,6 +206,7 @@ func process_resp(req REQ, input string, conn net.Conn) bool {
 		data = fmt.Sprintf(`{"cpuinfo":"%s","vcpu_num":%d}`,
 			*GuestCPU_ARCH+", "+strconv.Itoa(*GuestCPUs), *GuestCPUs)
 	case 8:
+		// VM version
 		data = fmt.Sprintf(`{"id":"Virtualization","name":"Virtual Machine Manager","timestamp":%d,"version":"%s"}`,
 			*VmTimestamp, *VmVersion)
 	case 9:
@@ -217,6 +214,7 @@ func process_resp(req REQ, input string, conn net.Conn) bool {
 	case 10:
 		// Guest Info
 	case 11:
+		run_once()
 		// Guest UUID
 		data = uuid(guest_id())
 	case 12:
@@ -228,8 +226,7 @@ func process_resp(req REQ, input string, conn net.Conn) bool {
 		data = *HostSN
 	case 14:
 		// Host MAC
-		data = *HostMAC
-		data = strings.ToLower(strings.ReplaceAll(data, "-", ":"))
+		data = strings.ToLower(strings.ReplaceAll(*HostMAC, "-", ":"))
 	case 15:
 		// Host model
 		data = *HostModel
@@ -241,6 +238,10 @@ func process_resp(req REQ, input string, conn net.Conn) bool {
 	default:
 		log.Printf("No handler for command: %d\n", req.CommandID)
 		return false
+	}
+
+	if data = "" {
+		fmt.Printf("No data returned for command: %d\n", req.CommandID)
 	}
 
 	buf := make([]byte, 0, 4096)
