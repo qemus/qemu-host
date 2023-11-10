@@ -1,4 +1,4 @@
-on: [workflow_dispatch]
+on: [workflow_call]
 name: "Test"
 permissions: {}
 
@@ -33,3 +33,4 @@ jobs:
       with:
           version: latest
           working-directory: src
+          args: --out-format=colored-line-number
