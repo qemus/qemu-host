@@ -250,7 +250,7 @@ func process_resp(req REQ, conn net.Conn) {
 
 	// write to buf
 	logw(binary.Write(writer, binary.LittleEndian, &req))
-	
+
 	writer.Write([]byte(data))
 	res := writer.Bytes()
 
@@ -409,11 +409,11 @@ func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 }
 
 func logerr(n int, err error) {
-    logw(err)
+	logw(err)
 }
 
 func logw(err error) {
-    if err != nil { log.Println("Write failed:", err) }
+	if err != nil { log.Println("Write failed:", err) }
 }
 
 func host_id() [16]byte {
