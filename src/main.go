@@ -65,6 +65,9 @@ var Writer sync.Mutex
 var Connection net.Conn
 var Executed atomic.Bool
 
+const Header = 64
+const Packet = 4096
+
 var GuestCPUs = flag.Int("cpu", 1, "Number of CPU cores")
 var VmVersion = flag.String("version", "2.6.5-12202", "VM Version")
 var VmTimestamp = flag.Int("ts", int(time.Now().Unix()), "VM Time")
@@ -98,14 +101,15 @@ func main() {
 
 	for {
 		conn, err := listener.Accept()
+
 		if err != nil {
 			log.Println("Error on accept:", err)
 			return
-		} else {
-			fmt.Printf("New connection from %s\n", conn.RemoteAddr().String())
-
-			go incoming_conn(conn)
 		}
+
+		fmt.Printf("New connection from %s\n", conn.RemoteAddr().String())
+
+		go incoming_conn(conn)
 	}
 }
 
@@ -129,7 +133,7 @@ func incoming_conn(conn net.Conn) {
 	Connection = conn
 
 	for {
-		buf := make([]byte, 4096)
+		buf := make([]byte, Packet)
 		len, err := conn.Read(buf)
 
 		if err != nil {
@@ -138,12 +142,12 @@ func incoming_conn(conn net.Conn) {
 			} else {
 				fmt.Println("Disconnected:", err)
 			}
-			if len != 4096 { return }
+			if len != Packet { return }
 		}
 
-		if len != 4096 {
+		if len != Packet {
 			// Something wrong, close and wait for reconnect
-			log.Printf("Read error: Received %d Bytes, not 4096\n", len)
+			log.Printf("Read error: Received %d bytes, not %d\n", len, Packet)
 			return
 		}
 
@@ -156,6 +160,7 @@ func process_req(buf []byte, conn net.Conn) {
 	var req REQ
 
 	err := binary.Read(bytes.NewReader(buf), binary.LittleEndian, &req)
+
 	if err != nil {
 		log.Printf("Error on decode: %s\n", err)
 		return
@@ -167,13 +172,13 @@ func process_req(buf []byte, conn net.Conn) {
 	if req.IsReq == 1 {
 
 		title = "Received"
-		data = string(buf[64 : 64+req.ReqLength])
+		data = string(buf[Header : Header+req.ReqLength])
 		if req.CommandID == 3 { Executed.Store(false) }
 
 	} else if req.IsResp == 1 {
 
 		title = "Response"
-		data = string(buf[64 : 64+req.RespLength])
+		data = string(buf[Header : Header+req.RespLength])
 
 		if req.CommandID != 0 && req.CommandID == atomic.LoadInt32(&WaitingFor) {
 			atomic.StoreInt32(&WaitingFor, 0)
@@ -198,41 +203,31 @@ func process_resp(req REQ, conn net.Conn) {
 	var data string
 
 	switch req.CommandID {
-	case 4:
-		// Host version
-		data = fmt.Sprintf(`{"buildnumber":%d,"smallfixnumber":%d}`,
-			*HostBuildNumber, *HostFixNumber)
-	case 5:
-		// Guest SN
-		data = *GuestSN
-	case 7:
-		// CPU info
-		data = fmt.Sprintf(`{"cpuinfo":"%s","vcpu_num":%d}`,
-			*GuestCPU_ARCH+", "+strconv.Itoa(*GuestCPUs), *GuestCPUs)
-	case 8:
-		// VM version
-		data = fmt.Sprintf(`{"id":"Virtualization","name":"Virtual Machine Manager","timestamp":%d,"version":"%s"}`,
-			*VmTimestamp, *VmVersion)
-	case 11:
-		run_once()
-		// Guest UUID
-		data = uuid(guest_id())
-	case 12:
-		run_once()
-		// Cluster UUID
-		data = uuid(host_id())
-	case 13:
-		// Host SN
-		data = *HostSN
-	case 14:
-		// Host MAC
-		data = strings.ToLower(strings.ReplaceAll(*HostMAC, "-", ":"))
-	case 15:
-		// Host model
-		data = *HostModel
-	case 16:
-		// Update Dead line time, always 0x7fffffffffffffff
-		data = "9223372036854775807"
+		case 4: // Host version
+			data = fmt.Sprintf(`{"buildnumber":%d,"smallfixnumber":%d}`,
+				*HostBuildNumber, *HostFixNumber)
+		case 5: // Guest SN
+			data = *GuestSN
+		case 7: // CPU info
+			data = fmt.Sprintf(`{"cpuinfo":"%s","vcpu_num":%d}`,
+				*GuestCPU_ARCH+", "+strconv.Itoa(*GuestCPUs), *GuestCPUs)
+		case 8: // VM version
+			data = fmt.Sprintf(`{"id":"Virtualization","name":"Virtual Machine Manager","timestamp":%d,"version":"%s"}`,
+				*VmTimestamp, *VmVersion)
+		case 11: // Guest UUID
+			run_once()
+			data = uuid(guest_id())
+		case 12: // Cluster UUID
+			run_once()
+			data = uuid(host_id())
+		case 13: // Host SN
+			data = *HostSN
+		case 14: // Host MAC
+			data = strings.ToLower(strings.ReplaceAll(*HostMAC, "-", ":"))
+		case 15: // Host model
+			data = *HostModel
+		case 16: // Update Dead line time, always 0x7fffffffffffffff
+			data = "9223372036854775807"
 	}
 
 	req.IsReq = 0
@@ -310,12 +305,12 @@ func read(w http.ResponseWriter, r *http.Request) {
 	var resp RESP
 
 	select {
-	case res := <-Chan:
-		resp = res
-	case <-time.After(15 * time.Second):
-		atomic.StoreInt32(&WaitingFor, 0)
-		fail(w, fmt.Sprintf("Timeout while reading command %d from guest \n", commandID))
-		return
+		case res := <-Chan:
+			resp = res
+		case <-time.After(15 * time.Second):
+			atomic.StoreInt32(&WaitingFor, 0)
+			fail(w, fmt.Sprintf("Timeout while reading command %d from guest \n", commandID))
+			return
 	}
 
 	atomic.StoreInt32(&WaitingFor, 0)
@@ -365,7 +360,7 @@ func write(w http.ResponseWriter, r *http.Request) {
 
 func packet(req REQ, data string) []byte {
 
-	buf := make([]byte, 0, 4096)
+	buf := make([]byte, 0, Packet)
 	writer := bytes.NewBuffer(buf)
 
 	// write to buf
@@ -373,7 +368,7 @@ func packet(req REQ, data string) []byte {
 	if data != "" { writer.Write([]byte(data)) }
 
 	// full fill 4096
-	buf = make([]byte, 4096)
+	buf = make([]byte, Packet)
 	copy(buf, writer.Bytes())
 
 	return buf
@@ -381,19 +376,18 @@ func packet(req REQ, data string) []byte {
 
 func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
 
-	var req REQ
-
-	req.CommandID = CommandID
-	req.SubCommand = SubCommand
-
-	req.IsReq = 1
-	req.IsResp = 0
-	req.ReqLength = 0
-	req.RespLength = 0
-	req.GuestID = 10000000
-	req.RandID = rand.Int63()
-	req.GuestUUID = guest_id()
-	req.NeedResponse = needsResp
+	req := REQ{
+		IsReq: 1,
+		IsResp: 0,
+		ReqLength: 0,
+		RespLength: 0,
+		GuestID: 10000000,
+		RandID: rand.Int63(),
+		GuestUUID: guest_id(),
+		NeedResponse: needsResp,
+		CommandID: CommandID,
+		SubCommand: SubCommand,
+	}
 
 	//fmt.Printf("Writing command %d\n", CommandID)
 
