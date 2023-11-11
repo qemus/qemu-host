@@ -59,14 +59,14 @@ type REQ struct {
 	Reserve int32
 }
 
+const Header = 64
+const Packet = 4096
+
 var Chan chan RESP
 var WaitingFor int32
 var Writer sync.Mutex
 var Connection net.Conn
 var Executed atomic.Bool
-
-const Header = 64
-const Packet = 4096
 
 var GuestCPUs = flag.Int("cpu", 1, "Number of CPU cores")
 var VmVersion = flag.String("version", "2.6.5-12202", "VM Version")
@@ -207,7 +207,7 @@ func process_resp(req REQ, conn net.Conn) {
 			data = fmt.Sprintf(`{"buildnumber":%d,"smallfixnumber":%d}`,
 				*HostBuildNumber, *HostFixNumber)
 		case 5: // Guest SN
-			data = *GuestSN
+			data = strings.ToUpper(*GuestSN)
 		case 7: // CPU info
 			data = fmt.Sprintf(`{"cpuinfo":"%s","vcpu_num":%d}`,
 				*GuestCPU_ARCH+", "+strconv.Itoa(*GuestCPUs), *GuestCPUs)
@@ -221,7 +221,7 @@ func process_resp(req REQ, conn net.Conn) {
 			run_once()
 			data = uuid(host_id())
 		case 13: // Host SN
-			data = *HostSN
+			data = strings.ToUpper(*HostSN)
 		case 14: // Host MAC
 			data = strings.ToLower(strings.ReplaceAll(*HostMAC, "-", ":"))
 		case 15: // Host model
@@ -408,11 +408,11 @@ func logw(err error) {
 }
 
 func host_id() [16]byte {
-	return md5.Sum([]byte("h" + *HostSN))
+	return md5.Sum([]byte("h" + strings.ToUpper(*HostSN)))
 }
 
 func guest_id() [16]byte {
-	return md5.Sum([]byte("g" + *GuestSN))
+	return md5.Sum([]byte("g" + strings.ToUpper(*GuestSN)))
 }
 
 func uuid(b [16]byte) string {
