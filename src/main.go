@@ -40,7 +40,7 @@ var commandsName = map[int]string{
 	17: "Guest Timestamp",
 }
 
-type RESP struct {
+type RET struct {
 	id int32
 	data string
 }
@@ -62,7 +62,7 @@ type REQ struct {
 const Header = 64
 const Packet = 4096
 
-var Chan chan RESP
+var Chan chan RET
 var WaitingFor int32
 var Writer sync.Mutex
 var Connection net.Conn
@@ -87,7 +87,7 @@ func main() {
 	flag.Parse()
 
 	go http_listener(*ApiPort)
-	Chan = make(chan RESP, 1)
+
 	listener, err := net.Listen("tcp", *ListenAddr)
 
 	if err != nil {
@@ -114,6 +114,8 @@ func main() {
 }
 
 func http_listener(port string) {
+
+	Chan = make(chan RET, 1)
 
 	router := http.NewServeMux()
 	router.HandleFunc("/", home)
@@ -180,11 +182,12 @@ func process_req(buf []byte, conn net.Conn) {
 		title = "Response"
 		data = string(buf[Header : Header+req.RespLength])
 
-		if req.CommandID != 0 && req.CommandID == atomic.LoadInt32(&WaitingFor) {
+		if req.CommandID == atomic.LoadInt32(&WaitingFor) && req.CommandID != 0 {
 			atomic.StoreInt32(&WaitingFor, 0)
-			var resp RESP
-			resp.id = req.CommandID
-			resp.data = strings.Replace(data, "\x00", "", -1)
+			resp := RET{
+				id: req.CommandID,
+				data: strings.Replace(data, "\x00", "", -1),
+			}
 			Chan <- resp
 		}
 	}
@@ -199,6 +202,43 @@ func process_req(buf []byte, conn net.Conn) {
 }
 
 func process_resp(req REQ, conn net.Conn) {
+
+	req.IsReq = 0
+	req.IsResp = 1
+	req.ReqLength = 0
+	req.RespLength = 0
+	req.NeedResponse = 0
+
+	data := payload(req)
+
+	if data != "" {
+		req.RespLength = int32(len([]byte(data)) + 1)
+	} else if req.CommandID != 10 {
+		log.Printf("No handler available for command: %d\n", req.CommandID)
+	}
+
+	fmt.Printf("Replied: %s [%d] \n", data, int(req.CommandID))
+
+	logerr(conn.Write(packet(req, data)))
+}
+
+func packet(req REQ, data string) []byte {
+
+	buf := make([]byte, 0, Packet)
+	writer := bytes.NewBuffer(buf)
+
+	// write to buf
+	logw(binary.Write(writer, binary.LittleEndian, &req))
+	if data != "" { writer.Write([]byte(data)) }
+
+	// full fill 4096
+	buf = make([]byte, Packet)
+	copy(buf, writer.Bytes())
+
+	return buf
+}
+
+func payload(req REQ) string {
 
 	var data string
 
@@ -230,42 +270,32 @@ func process_resp(req REQ, conn net.Conn) {
 			data = "9223372036854775807"
 	}
 
-	req.IsReq = 0
-	req.IsResp = 1
-	req.ReqLength = 0
-	req.RespLength = 0
-	req.NeedResponse = 0
+	return data
+}
 
-	if data != "" {
-		req.RespLength = int32(len([]byte(data)) + 1)
-	} else if req.CommandID != 10 {
-		log.Printf("No handler available for command: %d\n", req.CommandID)
+func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
+
+	req := REQ{
+		IsReq: 1,
+		IsResp: 0,
+		ReqLength: 0,
+		RespLength: 0,
+		GuestID: 10000000,
+		RandID: rand.Int63(),
+		GuestUUID: guest_id(),
+		NeedResponse: needsResp,
+		CommandID: CommandID,
+		SubCommand: SubCommand,
 	}
 
-	fmt.Printf("Replied: %s [%d] \n", data, int(req.CommandID))
+	//fmt.Printf("Writing command %d\n", CommandID)
 
-	logerr(conn.Write(packet(req, data)))
-}
+	if Connection == nil { return false }
+	_, err := Connection.Write(packet(req, ""))
+	if err == nil { return true }
 
-func fail(w http.ResponseWriter, msg string) {
-
-	log.Printf("API: " + msg)
-	msg = strings.Replace(msg, "\"", "", -1)
-	w.WriteHeader(http.StatusInternalServerError)
-	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + msg + `"}`)))
-}
-
-func ok(w http.ResponseWriter, data string) {
-
-	if data == "" { data = "null" }
-	w.WriteHeader(http.StatusOK)
-	logerr(w.Write([]byte(`{"status": "success", "data": ` + data + `, "message": null}`)))
-}
-
-func home(w http.ResponseWriter, r *http.Request) {
-
-	w.Header().Set("Content-Type", "application/json")
-	fail(w, "No command specified")
+	log.Println("Write error:", err)
+	return false
 }
 
 func read(w http.ResponseWriter, r *http.Request) {
@@ -302,7 +332,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var resp RESP
+	var resp RET
 
 	select {
 		case res := <-Chan:
@@ -358,45 +388,25 @@ func write(w http.ResponseWriter, r *http.Request) {
 	ok(w, "")
 }
 
-func packet(req REQ, data string) []byte {
+func home(w http.ResponseWriter, r *http.Request) {
 
-	buf := make([]byte, 0, Packet)
-	writer := bytes.NewBuffer(buf)
-
-	// write to buf
-	logw(binary.Write(writer, binary.LittleEndian, &req))
-	if data != "" { writer.Write([]byte(data)) }
-
-	// full fill 4096
-	buf = make([]byte, Packet)
-	copy(buf, writer.Bytes())
-
-	return buf
+	w.Header().Set("Content-Type", "application/json")
+	fail(w, "No command specified")
 }
 
-func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
+func fail(w http.ResponseWriter, msg string) {
 
-	req := REQ{
-		IsReq: 1,
-		IsResp: 0,
-		ReqLength: 0,
-		RespLength: 0,
-		GuestID: 10000000,
-		RandID: rand.Int63(),
-		GuestUUID: guest_id(),
-		NeedResponse: needsResp,
-		CommandID: CommandID,
-		SubCommand: SubCommand,
-	}
+	log.Printf("API: " + msg)
+	msg = strings.Replace(msg, "\"", "", -1)
+	w.WriteHeader(http.StatusInternalServerError)
+	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + msg + `"}`)))
+}
 
-	//fmt.Printf("Writing command %d\n", CommandID)
+func ok(w http.ResponseWriter, data string) {
 
-	if Connection == nil { return false }
-	_, err := Connection.Write(packet(req, ""))
-	if err == nil { return true }
-
-	log.Println("Write error:", err)
-	return false
+	if data == "" { data = "null" }
+	w.WriteHeader(http.StatusOK)
+	logerr(w.Write([]byte(`{"status": "success", "data": ` + data + `, "message": null}`)))
 }
 
 func logerr(n int, err error) {
