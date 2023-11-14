@@ -346,7 +346,8 @@ func read(w http.ResponseWriter, r *http.Request) {
 	atomic.StoreInt32(&WaitingFor, 0)
 
 	if resp.req.CommandID != (int32)(commandID) {
-		fail(w, fmt.Sprintf("Received wrong response for command %d from guest: %d \n", commandID, resp.id))
+		fail(w, fmt.Sprintf("Received wrong response for command %d from guest: %d \n",
+			commandID, resp.req.CommandID))
 		return
 	}
 
