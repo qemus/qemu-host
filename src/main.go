@@ -398,14 +398,21 @@ func home(w http.ResponseWriter, r *http.Request) {
 func fail(w http.ResponseWriter, msg string) {
 
 	log.Printf("API: " + msg)
-	msg = strings.Replace(msg, "\"", "", -1)
+	msg = strings.Replace(msg, "\"", "\\\"", -1)
 	w.WriteHeader(http.StatusInternalServerError)
 	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + msg + `"}`)))
 }
 
 func ok(w http.ResponseWriter, data string) {
 
-	if data == "" { data = "null" }
+	if strings.TrimSpace(data) == "" { 
+		data = "null" 
+	} else {
+		if !strings.HasPrefix(strings.TrimSpace(data), "{") {
+			data = "\"" + strings.Replace(data, "\"", "\\\"", -1) + "\""
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 	logerr(w.Write([]byte(`{"status": "success", "data": ` + data + `, "message": null}`)))
 }
