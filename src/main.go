@@ -41,7 +41,7 @@ var commandsName = map[int]string{
 }
 
 type RET struct {
-	id int32
+	req REQ
 	data string
 }
 
@@ -185,7 +185,7 @@ func process_req(buf []byte, conn net.Conn) {
 		if req.CommandID == atomic.LoadInt32(&WaitingFor) && req.CommandID != 0 {
 			atomic.StoreInt32(&WaitingFor, 0)
 			resp := RET{
-				id: req.CommandID,
+				req: req,
 				data: strings.Replace(data, "\x00", "", -1),
 			}
 			Chan <- resp
@@ -345,12 +345,12 @@ func read(w http.ResponseWriter, r *http.Request) {
 
 	atomic.StoreInt32(&WaitingFor, 0)
 
-	if resp.id != (int32)(commandID) {
+	if resp.req.commandID != (int32)(commandID) {
 		fail(w, fmt.Sprintf("Received wrong response for command %d from guest: %d \n", commandID, resp.id))
 		return
 	}
 
-	if resp.data == "" && resp.id != 6 {
+	if resp.data == "" && resp.req.commandID != 6 {
 		fail(w, fmt.Sprintf("Received no data for command %d \n", commandID))
 		return
 	}
