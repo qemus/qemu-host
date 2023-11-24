@@ -11,7 +11,11 @@ on:
       - '.dockerignore'
       - '.github/**'
       - '.github/workflows/**'
-      
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
 jobs:
   test:
     name: Test
