@@ -78,7 +78,7 @@ jobs:
           annotations: ${{ steps.meta.outputs.labels }}
           build-args: |
             VCS_REF=${GITHUB_SHA::8}
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION_ARG=${{ steps.meta.outputs.version }}
       -
         name: Create a release
         uses: action-pack/github-release@v2
