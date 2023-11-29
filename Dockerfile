@@ -12,10 +12,4 @@ FROM scratch
 
 COPY --from=builder /src/qemu-host/main /qemu-host.bin
 
-ARG VERSION_ARG="0.0"
-ENV VERSION=$VERSION_ARG
-
-LABEL org.opencontainers.image.title="QEMU Host"
-LABEL org.opencontainers.image.description="Host for communicating with a QEMU Agent"
-
 ENTRYPOINT ["/qemu-host.bin"]
