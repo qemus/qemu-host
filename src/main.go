@@ -62,6 +62,7 @@ type REQ struct {
 const Header = 64
 const Packet = 4096
 
+var Version string
 var Chan chan RET
 var WaitingFor int32
 var Writer sync.Mutex
@@ -97,7 +98,7 @@ func main() {
 
 	defer listener.Close()
 
-	fmt.Println("Start listen on " + *ListenAddr)
+	fmt.Println("Version %s started listening on %s", Version, *ListenAddr)
 
 	for {
 		conn, err := listener.Accept()
