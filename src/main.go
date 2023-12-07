@@ -310,7 +310,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	commandID, err := strconv.Atoi(query.Get("command"))
 
 	if err != nil || commandID < 1 {
-		fail(w, fmt.Sprintf("Failed to parse command %s\n", query.Get("command")))
+		fail(w, fmt.Sprintf("Failed to parse command %s", query.Get("command")))
 		return
 	}
 
@@ -320,7 +320,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for len(Chan) > 0 {
-		log.Printf("Warning: channel was not empty?")
+		log.Println("Warning: channel was not empty?")
 		<-Chan
 	}
 
@@ -329,7 +329,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 
 	if !send_command((int32)(commandID), 1, 1) {
 		atomic.StoreInt32(&WaitingFor, 0)
-		fail(w, fmt.Sprintf("Failed reading command %d from guest\n", commandID))
+		fail(w, fmt.Sprintf("Failed reading command %d from guest", commandID))
 		return
 	}
 
@@ -340,20 +340,20 @@ func read(w http.ResponseWriter, r *http.Request) {
 			resp = res
 		case <-time.After(25 * time.Second):
 			atomic.StoreInt32(&WaitingFor, 0)
-			fail(w, fmt.Sprintf("Timeout while reading command %d from guest\n", commandID))
+			fail(w, fmt.Sprintf("Timeout while reading command %d from guest", commandID))
 			return
 	}
 
 	atomic.StoreInt32(&WaitingFor, 0)
 
 	if resp.req.CommandID != (int32)(commandID) {
-		fail(w, fmt.Sprintf("Received wrong response for command %d from guest: %d\n",
+		fail(w, fmt.Sprintf("Received wrong response for command %d from guest: %d",
 			commandID, resp.req.CommandID))
 		return
 	}
 
 	if resp.data == "" && resp.req.CommandID != 6 {
-		fail(w, fmt.Sprintf("Received no data for command %d\n", commandID))
+		fail(w, fmt.Sprintf("Received no data for command %d", commandID))
 		return
 	}
 
@@ -376,14 +376,14 @@ func write(w http.ResponseWriter, r *http.Request) {
 	commandID, err := strconv.Atoi(query.Get("command"))
 
 	if err != nil || commandID < 1 {
-		fail(w, fmt.Sprintf("Failed to parse command %s\n", query.Get("command")))
+		fail(w, fmt.Sprintf("Failed to parse command %s", query.Get("command")))
 		return
 	}
 
 	fmt.Printf("Command: %s [%d]\n", commandsName[commandID], commandID)
 
 	if !send_command((int32)(commandID), 1, 0) {
-		fail(w, fmt.Sprintf("Failed sending command %d to guest\n", commandID))
+		fail(w, fmt.Sprintf("Failed sending command %d to guest", commandID))
 		return
 	}
 
@@ -396,12 +396,22 @@ func home(w http.ResponseWriter, r *http.Request) {
 	fail(w, "No command specified")
 }
 
+func escape(msg string) {
+
+	msg = strings.Replace(msg, "\\", "\\\\", -1)
+	msg = strings.Replace(msg, "\"", "\\\"", -1)
+	msg = strings.Replace(msg, "\n", " ", -1)
+	msg = strings.Replace(msg, "\r", " ", -1)
+	msg = strings.Replace(msg, "\t", " ", -1)
+
+	return msg
+}
+
 func fail(w http.ResponseWriter, msg string) {
 
-	log.Printf("API: " + msg)
-	msg = strings.Replace(msg, "\"", "\\\"", -1)
+	log.Println("API: " + msg)
 	w.WriteHeader(http.StatusInternalServerError)
-	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + msg + `"}`)))
+	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + escape(msg) + `"}`)))
 }
 
 func ok(w http.ResponseWriter, data string) {
@@ -410,7 +420,7 @@ func ok(w http.ResponseWriter, data string) {
 		data = "null" 
 	} else {
 		if !strings.HasPrefix(strings.TrimSpace(data), "{") {
-			data = "\"" + strings.Replace(data, "\"", "\\\"", -1) + "\""
+			data = "\"" + escape(data) + "\""
 		}
 	}
 
