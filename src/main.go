@@ -411,7 +411,7 @@ func fail(w http.ResponseWriter, msg string) {
 
 	log.Println("API: " + msg)
 	w.WriteHeader(http.StatusInternalServerError)
-	logerr(w.Write([]byte(`{"status": "error", "data": null, "message": "` + escape(msg) + `"}`)))
+	logerr(w.Write([]byte(`{"status": "error", "message": "` + escape(msg) + `", "data": null}`)))
 }
 
 func ok(w http.ResponseWriter, data string) {
