@@ -396,7 +396,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 	fail(w, "No command specified")
 }
 
-func escape(msg string) {
+func escape(msg string) string {
 
 	msg = strings.Replace(msg, "\\", "\\\\", -1)
 	msg = strings.Replace(msg, "\"", "\\\"", -1)
