@@ -81,7 +81,7 @@ var GuestSN = flag.String("guestsn", "0000000000000", "Guest serial number")
 var GuestCPU_Arch = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
 
 var ApiPort = flag.String("api", ":2210", "API port")
-var ApiTimeout = flag.Int("timeout", 45, "API timeout")
+var ApiTimeout = flag.Int("timeout", 10, "Default timeout")
 var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
 
 func main() {
@@ -308,11 +308,29 @@ func read(w http.ResponseWriter, r *http.Request) {
 	defer Writer.Unlock()
 
 	query := r.URL.Query()
-	commandID, err := strconv.Atoi(query.Get("command"))
+	cmd := query.Get("command")
+	timeout := query.Get("timeout")
+	wait := time.Duration(*ApiTimeout)
+
+	if len(strings.TrimSpace(cmd)) == 0 {
+		fail(w, "No command specified")
+		return
+	}
+
+	commandID, err := strconv.Atoi(cmd)
 
 	if err != nil || commandID < 1 {
-		fail(w, fmt.Sprintf("Failed to parse command %s", query.Get("command")))
+		fail(w, fmt.Sprintf("Failed to parse command: %s", cmd))
 		return
+	}
+
+	if len(strings.TrimSpace(timeout)) > 0 {
+		duration, err := strconv.Atoi(timeout)
+		if err != nil || duration < 1 {
+			fail(w, fmt.Sprintf("Failed to parse timeout: %s", timeout))
+			return
+		}
+		wait = time.Duration(duration)
 	}
 
 	if Connection == nil || Chan == nil {
@@ -339,7 +357,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	select {
 		case res := <-Chan:
 			resp = res
-		case <-time.After(time.Duration(*ApiTimeout) * time.Second):
+		case <-time.After(wait * time.Second):
 			atomic.StoreInt32(&WaitingFor, 0)
 			fail(w, fmt.Sprintf("Timeout while reading command %d from guest", commandID))
 			return
@@ -374,10 +392,17 @@ func write(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	commandID, err := strconv.Atoi(query.Get("command"))
+	cmd := query.Get("command")
+
+	if len(strings.TrimSpace(cmd)) == 0 {
+		fail(w, "No command specified")
+		return
+	}
+
+	commandID, err := strconv.Atoi(cmd)
 
 	if err != nil || commandID < 1 {
-		fail(w, fmt.Sprintf("Failed to parse command %s", query.Get("command")))
+		fail(w, fmt.Sprintf("Failed to parse command: %s", cmd))
 		return
 	}
 
