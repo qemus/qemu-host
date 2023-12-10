@@ -339,7 +339,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	select {
 		case res := <-Chan:
 			resp = res
-		case <-time.After(*ApiTimeout * time.Second):
+		case <-time.After(time.Duration(*ApiTimeout) * time.Second):
 			atomic.StoreInt32(&WaitingFor, 0)
 			fail(w, fmt.Sprintf("Timeout while reading command %d from guest", commandID))
 			return
