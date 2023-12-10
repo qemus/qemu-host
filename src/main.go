@@ -78,7 +78,7 @@ var HostModel = flag.String("model", "Virtualhost", "Host model name")
 var HostMAC = flag.String("mac", "00:00:00:00:00:00", "Host MAC address")
 var HostSN = flag.String("hostsn", "0000000000000", "Host serial number")
 var GuestSN = flag.String("guestsn", "0000000000000", "Guest serial number")
-var GuestCPU_ARCH = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
+var GuestCPU_Arch = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
 
 var ApiPort = flag.String("api", ":2210", "API port")
 var ApiTimeout = flag.Int("timeout", 45, "API timeout")
@@ -252,7 +252,7 @@ func payload(req REQ) string {
 			data = strings.ToUpper(*GuestSN)
 		case 7: // CPU info
 			data = fmt.Sprintf(`{"cpuinfo":"%s","vcpu_num":%d}`,
-				*GuestCPU_ARCH+", "+strconv.Itoa(*GuestCPUs), *GuestCPUs)
+				*GuestCPU_Arch+", "+strconv.Itoa(*GuestCPUs), *GuestCPUs)
 		case 8: // VM version
 			data = fmt.Sprintf(`{"id":"Virtualization","name":"Virtual Machine Manager","timestamp":%d,"version":"%s"}`,
 				*VmTimestamp, *VmVersion)
@@ -339,7 +339,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	select {
 		case res := <-Chan:
 			resp = res
-		case <-time.After(ApiTimeout * time.Second):
+		case <-time.After(time.Duration(*ApiTimeout) * time.Second):
 			atomic.StoreInt32(&WaitingFor, 0)
 			fail(w, fmt.Sprintf("Timeout while reading command %d from guest", commandID))
 			return
