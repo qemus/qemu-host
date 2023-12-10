@@ -81,6 +81,7 @@ var GuestSN = flag.String("guestsn", "0000000000000", "Guest serial number")
 var GuestCPU_ARCH = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
 
 var ApiPort = flag.String("api", ":2210", "API port")
+var ApiTimeout = flag.Int("timeout", 45, "API timeout")
 var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
 
 func main() {
@@ -338,7 +339,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	select {
 		case res := <-Chan:
 			resp = res
-		case <-time.After(25 * time.Second):
+		case <-time.After(ApiTimeout * time.Second):
 			atomic.StoreInt32(&WaitingFor, 0)
 			fail(w, fmt.Sprintf("Timeout while reading command %d from guest", commandID))
 			return
