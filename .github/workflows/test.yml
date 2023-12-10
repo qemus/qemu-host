@@ -1,36 +1,15 @@
-on: [workflow_call, workflow_dispatch]
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '**/*.go'
+      - '.github/workflows/test.yml'
+      - '.github/workflows/check.yml'
+
 name: "Test"
 permissions: {}
 
 jobs:
-  test:
-    name: test
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        cache: false
-        go-version: '1.21.5'
-
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-          version: latest
-          working-directory: src
-          args: --out-format=colored-line-number
-
-    - name: Run staticcheck
-      uses: dominikh/staticcheck-action@v1
-      with:
-        version: latest
-        install-go: false
-        working-directory: src
-
-    - name: Run Go vet
-      run: go vet ./...
-      working-directory: src
+  check:
+    name: Test
+    uses: ./.github/workflows/check.yml

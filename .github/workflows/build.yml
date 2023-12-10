@@ -18,12 +18,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  check:
     name: Test
-    uses: ./.github/workflows/test.yml
+    uses: ./.github/workflows/check.yml
   build:
     name: Build
-    needs: test
+    needs: check
     runs-on: ubuntu-latest
     permissions:
       actions: write
