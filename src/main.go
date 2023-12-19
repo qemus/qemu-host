@@ -249,6 +249,7 @@ func payload(req REQ) string {
 			data = fmt.Sprintf(`{"buildnumber":%d,"smallfixnumber":%d}`,
 				*HostBuildNumber, *HostFixNumber)
 		case 5: // Guest SN
+			run_once()
 			data = strings.ToUpper(*GuestSN)
 		case 7: // CPU info
 			data = fmt.Sprintf(`{"cpuinfo":"%s","vcpu_num":%d}`,
@@ -263,6 +264,7 @@ func payload(req REQ) string {
 			run_once()
 			data = uuid(host_id())
 		case 13: // Host SN
+			run_once()
 			data = strings.ToUpper(*HostSN)
 		case 14: // Host MAC
 			data = strings.ToLower(strings.ReplaceAll(*HostMAC, "-", ":"))
