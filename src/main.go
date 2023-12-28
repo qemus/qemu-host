@@ -141,10 +141,10 @@ func incoming_conn(conn net.Conn) {
 		len, err := conn.Read(buf)
 
 		if err != nil {
-			if err != io.EOF {
-				log.Println("Read error:", err)
-			} else {
+			if err == io.EOF || errors.Is(err, syscall.ECONNRESET) {
 				fmt.Println("Disconnected:", err)
+			} else {
+				log.Println("Read error:", err)
 			}
 			if len != Packet { return }
 		}
