@@ -1,6 +1,6 @@
 <h1 align="center">QEMU Host<br />
 <div align="center">
-<img src="https://github.com/qemu-tools/qemu-docker/raw/master/.github/logo.png" title="Logo" style="max-width:100%;" width="128" />
+<img src="https://github.com/qemus/qemu-docker/raw/master/.github/logo.png" title="Logo" style="max-width:100%;" width="128" />
 </div>
 <div align="center">
 
@@ -65,11 +65,11 @@ Currently this is planned to be done as a pseudo-chardev that only QEMU/QMP sees
 
 The current list of supported RPCs is documented in qemu.git/qapi-schema-guest.json.
 
-[build_url]: https://github.com/qemu-tools/qemu-host/
+[build_url]: https://github.com/qemus/qemu-host/
 [hub_url]: https://hub.docker.com/r/qemux/qemu-host/
 [tag_url]: https://hub.docker.com/r/qemux/qemu-host/tags
 
-[Build]: https://github.com/qemu-tools/qemu-host/actions/workflows/build.yml/badge.svg
+[Build]: https://github.com/qemus/qemu-host/actions/workflows/build.yml/badge.svg
 [Size]: https://img.shields.io/docker/image-size/qemux/qemu-host/latest?color=066da5&label=size
 [Pulls]: https://img.shields.io/docker/pulls/qemux/qemu-host.svg?style=flat&label=pulls&logo=docker
 [Version]: https://img.shields.io/docker/v/qemux/qemu-host/latest?arch=amd64&sort=semver&color=066da5
