@@ -259,6 +259,8 @@ func payload(req REQ) string {
 		case 8: // VM version
 			data = fmt.Sprintf(`{"id":"Virtualization","name":"Virtual Machine Manager","timestamp":%d,"version":"%s"}`,
 				*VmTimestamp, *VmVersion)
+		case 10: //  Set network
+			data = `{"detail":[{"success":false,"type":"set_net"}]}`
 		case 11: // Guest UUID
 			run_once()
 			data = uuid(guest_id())
