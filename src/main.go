@@ -217,7 +217,7 @@ func process_resp(req REQ, conn net.Conn) {
 
 	if data != "" {
 		req.RespLength = int32(len([]byte(data)) + 1)
-	} else if req.CommandID != 10 {
+	} else {
 		log.Printf("No handler available for command: %d\n", req.CommandID)
 	}
 
