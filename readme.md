@@ -24,14 +24,14 @@ version: "3"
 services:
   qemu:
     container_name: qemu
-    image: qemux/qemu-host:latest
+    image: qemux/qemu-host
     restart: on-failure
 ```
 
 Via `docker run`
 
 ```bash
-docker run -it --rm qemux/qemu-host:latest
+docker run -it --rm qemux/qemu-host
 ```
 
 ### Background
