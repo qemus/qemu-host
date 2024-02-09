@@ -18,7 +18,7 @@ jobs:
         go-version-file: 'src/go.mod'
 
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v4
       with:
           version: latest
           working-directory: src
