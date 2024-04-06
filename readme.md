@@ -17,7 +17,7 @@ It is used to exchange information between the host and guest, and to execute co
 
 ## Usage
 
-Via `compose.yml`
+Via Docker Compose:
 
 ```yaml
 version: "3"
@@ -28,7 +28,7 @@ services:
     restart: on-failure
 ```
 
-Via `docker run`
+Via Docker CLI:
 
 ```bash
 docker run -it --rm qemux/qemu-host
