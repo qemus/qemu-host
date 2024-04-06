@@ -17,7 +17,7 @@ It is used to exchange information between the host and guest, and to execute co
 
 ## Usage
 
-Via `docker-compose.yml`
+Via `compose.yml`
 
 ```yaml
 version: "3"
