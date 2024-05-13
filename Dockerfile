@@ -11,6 +11,6 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -installsuffix c
 
 FROM scratch
 
-COPY --from=builder /src/qemu-host/main /qemu-host.bin
+COPY --chmod=755 --from=builder /src/qemu-host/main /qemu-host.bin
 
 ENTRYPOINT ["/qemu-host.bin"]
