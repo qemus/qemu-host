@@ -24,7 +24,6 @@ services:
   qemu:
     container_name: qemu
     image: qemux/qemu-host
-    restart: on-failure
 ```
 
 Via Docker CLI:
