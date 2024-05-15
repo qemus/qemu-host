@@ -20,7 +20,6 @@ It is used to exchange information between the host and guest, and to execute co
 Via Docker Compose:
 
 ```yaml
-version: "3"
 services:
   qemu:
     container_name: qemu
