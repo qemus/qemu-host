@@ -85,8 +85,8 @@ jobs:
         uses: shrink/actions-docker-extract@v3
         with:
           image: ${{ secrets.DOCKERHUB_REPO }}:latest
-          path: /qemu-host.bin
-          destination: /tmp/qemu-host.bin
+          path: "qemu-host.bin"
+          destination: "/tmp/qemu-host.bin"
       -
         name: Create a release
         uses: action-pack/github-release@v2
@@ -98,7 +98,7 @@ jobs:
         name: Update release
         uses: AButler/upload-release-assets@v3.0
         with:
-          files: '/tmp/qemu-host.bin'
+          files: "/tmp/qemu-host.bin"
           release-tag: "v${{ steps.meta.outputs.version }}"
           repo-token: ${{ secrets.REPO_ACCESS_TOKEN }}
       -
