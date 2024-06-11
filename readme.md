@@ -15,7 +15,7 @@ Tool for communicating with a QEMU Guest Agent daemon.
 
 It is used to exchange information between the host and guest, and to execute commands in the guest.
 
-## Usage
+## Usage  🐳
 
 Via Docker Compose:
 
@@ -32,7 +32,7 @@ Via Docker CLI:
 docker run -it --rm qemux/qemu-host
 ```
 
-### Background
+### Background 📜
 
 Ultimately the QEMU Guest Agent aims to provide access to a system-level agent via standard QMP commands.
 
@@ -63,7 +63,7 @@ Currently this is planned to be done as a pseudo-chardev that only QEMU/QMP sees
 
 The current list of supported RPCs is documented in qemu.git/qapi-schema-guest.json.
 
-## Stars
+## Stars 🌟
 [![Stars](https://starchart.cc/qemus/qemu-host.svg?variant=adaptive)](https://starchart.cc/qemus/qemu-host)
 
 [build_url]: https://github.com/qemus/qemu-host/
