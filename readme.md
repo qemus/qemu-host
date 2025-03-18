@@ -18,7 +18,7 @@ It is used to exchange information between the host and guest, and to execute co
 
 ## Usage  🐳
 
-Via Docker Compose:
+##### Via Docker Compose:
 
 ```yaml
 services:
@@ -27,7 +27,7 @@ services:
     image: qemux/qemu-host
 ```
 
-Via Docker CLI:
+##### Via Docker CLI:
 
 ```bash
 docker run -it --rm qemux/qemu-host
