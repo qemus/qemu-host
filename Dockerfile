@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM --platform=$BUILDPLATFORM golang:1.22-alpine as builder
 
 COPY src/ /src/qemu-host/
