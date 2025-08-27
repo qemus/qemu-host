@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine as builder
 
 COPY src/ /src/qemu-host/
 WORKDIR /src/qemu-host
