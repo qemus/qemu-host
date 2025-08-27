@@ -135,7 +135,7 @@ func http_listener(port string) {
 
 func incoming_conn(conn net.Conn) {
 
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	Connection = conn
 
 	for {
