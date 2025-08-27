@@ -21,9 +21,7 @@ jobs:
       uses: golangci/golangci-lint-action@v8
       with:
           version: latest
-          annotations: false
           working-directory: src
-          args: --path-mode=rel
 
     - name: Run staticcheck
       uses: dominikh/staticcheck-action@v1
