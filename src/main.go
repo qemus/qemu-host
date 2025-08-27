@@ -99,7 +99,7 @@ func main() {
 		return
 	}
 
-	defer listener.Close()
+    defer func() { _ = listener.Close() }()
 
 	fmt.Printf("Version %s started listening on %s\n", Version, *ListenAddr)
 
@@ -190,14 +190,14 @@ func process_req(buf []byte, conn net.Conn) {
 			atomic.StoreInt32(&WaitingFor, 0)
 			resp := RET{
 				req: req,
-				data: strings.Replace(data, "\x00", "", -1),
+				data: strings.ReplaceAll(data, "\x00", ""),
 			}
 			Chan <- resp
 		}
 	}
 
 	fmt.Printf("%s: %s [%d] %s\n", title, commandsName[int(req.CommandID)],
-		int(req.CommandID), strings.Replace(data, "\x00", "", -1))
+		int(req.CommandID), strings.ReplaceAll(data, "\x00", ""))
 
 	// if it's a req and need a response
 	if req.IsReq == 1 && req.NeedResponse == 1 {
@@ -430,11 +430,11 @@ func home(w http.ResponseWriter, r *http.Request) {
 
 func escape(msg string) string {
 
-	msg = strings.Replace(msg, "\\", "\\\\", -1)
-	msg = strings.Replace(msg, "\"", "\\\"", -1)
-	msg = strings.Replace(msg, "\n", " ", -1)
-	msg = strings.Replace(msg, "\r", " ", -1)
-	msg = strings.Replace(msg, "\t", " ", -1)
+	msg = strings.ReplaceAll(msg, "\\", "\\\\")
+	msg = strings.ReplaceAll(msg, "\"", "\\\"")
+	msg = strings.ReplaceAll(msg, "\n", " ")
+	msg = strings.ReplaceAll(msg, "\r", " ")
+	msg = strings.ReplaceAll(msg, "\t", " ")
 
 	return msg
 }
