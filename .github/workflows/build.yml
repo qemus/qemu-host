@@ -72,7 +72,7 @@ jobs:
             VERSION_ARG=${{ steps.meta.outputs.version }}
       - 
         name: Extract binary
-        uses: shrink/actions-docker-extract@v3
+        uses: shrink/actions-docker-extract@v4
         with:
           image: ${{ secrets.DOCKERHUB_REPO }}:latest
           path: "qemu-host.bin"
