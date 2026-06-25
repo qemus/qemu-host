@@ -65,7 +65,7 @@ Currently this is planned to be done as a pseudo-chardev that only QEMU/QMP sees
 The current list of supported RPCs is documented in qemu.git/qapi-schema-guest.json.
 
 ## Stars 🌟
-[![Stargazers](https://raw.githubusercontent.com/star-stats/stars/refs/heads/data/charts/qemus-qemu-host.svg)](https://github.com/dobtc/qemus/qemu-host)
+[![Stargazers](https://raw.githubusercontent.com/star-stats/stars/refs/heads/data/charts/qemus-qemu-host.svg)](https://github.com/qemus/qemu-host/stargazers)
 
 [build_url]: https://github.com/qemus/qemu-host/
 [hub_url]: https://hub.docker.com/r/qemux/qemu-host/
