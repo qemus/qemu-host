@@ -110,11 +110,7 @@ var (
 	VMVersion       = flag.String("version", "2.6.5-12202", "VM Version")
 	VMTimestamp     = flag.Int("ts", int(time.Now().Unix()), "VM Time")
 	HostFixNumber   = flag.Int("fixNumber", 0, "Fix number of Host")
-	HostBuildNumber = flag.Int(
-		"build",
-		69057,
-		"Build number of Host",
-	)
+	HostBuildNumber = flag.Int("build", 69057, "Build number of Host")
 	HostModel    = flag.String("model", "Virtualhost", "Host model name")
 	HostMAC      = flag.String("mac", "00:00:00:00:00:00", "Host MAC address")
 	HostSN       = flag.String("hostsn", "0000000000000", "Host serial number")
