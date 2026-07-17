@@ -12,7 +12,7 @@ jobs:
         fetch-depth: 1
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         cache: false
         go-version-file: 'src/go.mod'
@@ -33,7 +33,13 @@ jobs:
     - name: Run Go vet
       run: go vet ./...
       working-directory: src
-
+  
+    - name: Build binaries
+      run: |
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/qemu-host-amd64 .
+        CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/qemu-host-arm64 .
+      working-directory: src
+  
     - name: Lint Dockerfile
       uses: hadolint/hadolint-action@v3.3.0
       with:
