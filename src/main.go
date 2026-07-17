@@ -23,7 +23,7 @@ import (
 	"encoding/binary"
 )
 
-var commandsName = map[int]string{
+var commandsName = map[int32]string{
 	2:  "Guest info",
 	3:  "Guest power",
 	4:  "Host version",
@@ -43,337 +43,579 @@ var commandsName = map[int]string{
 }
 
 type RET struct {
-	req REQ
+	req  REQ
 	data string
 }
 
 type REQ struct {
-	RandID int64
-	GuestUUID[16] byte
-	GuestID int64
-	IsReq int32
-	IsResp int32
+	RandID       int64
+	GuestUUID    [16]byte
+	GuestID      int64
+	IsReq        int32
+	IsResp       int32
 	NeedResponse int32
-	ReqLength int32
-	RespLength int32
-	CommandID int32
-	SubCommand int32
-	Reserve int32
+	ReqLength    int32
+	RespLength   int32
+	CommandID    int32
+	SubCommand   int32
+	Reserve      int32
 }
 
-const Header = 64
-const Packet = 4096
+type connectionState struct {
+	conn    net.Conn
+	writeMu sync.Mutex
+}
 
-var Version string
-var Chan chan RET
-var WaitingFor int32
-var Writer sync.Mutex
-var Connection net.Conn
-var Executed atomic.Bool
+type pendingResult struct {
+	response RET
+	err      error
+}
 
-var GuestCPUs = flag.Int("cpu", 1, "Number of CPU cores")
-var VmVersion = flag.String("version", "2.6.5-12202", "VM Version")
-var VmTimestamp = flag.Int("ts", int(time.Now().Unix()), "VM Time")
-var HostFixNumber = flag.Int("fixNumber", 0, "Fix number of Host")
-var HostBuildNumber = flag.Int("build", 69057, "Build number of Host")
-var HostModel = flag.String("model", "Virtualhost", "Host model name")
-var HostMAC = flag.String("mac", "00:00:00:00:00:00", "Host MAC address")
-var HostSN = flag.String("hostsn", "0000000000000", "Host serial number")
-var GuestSN = flag.String("guestsn", "0000000000000", "Guest serial number")
-var GuestCPU_Arch = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
+type pendingRequest struct {
+	connection *connectionState
+	commandID  int32
+	randID     int64
+	result     chan pendingResult
+}
 
-var ApiPort = flag.String("api", ":2210", "API port")
-var ApiTimeout = flag.Int("timeout", 10, "Default timeout")
-var ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
+type apiResponse struct {
+	Status  string `json:"status"`
+	Data    any    `json:"data"`
+	Message any    `json:"message"`
+}
+
+const (
+	HeaderSize        = 64
+	PacketSize        = 4096
+	maxPayloadSize    = PacketSize - HeaderSize - 1
+	maxTimeoutSeconds = int64((1<<63 - 1) / int64(time.Second))
+)
+
+var (
+	Version string
+
+	writerMu sync.Mutex
+
+	connectionMu     sync.RWMutex
+	activeConnection *connectionState
+
+	pendingMu sync.Mutex
+	pending   *pendingRequest
+
+	executed atomic.Bool
+)
+
+var (
+	GuestCPUs       = flag.Int("cpu", 1, "Number of CPU cores")
+	VMVersion       = flag.String("version", "2.6.5-12202", "VM Version")
+	VMTimestamp     = flag.Int("ts", int(time.Now().Unix()), "VM Time")
+	HostFixNumber   = flag.Int("fixNumber", 0, "Fix number of Host")
+	HostBuildNumber = flag.Int(
+		"build",
+		69057,
+		"Build number of Host",
+	)
+	HostModel    = flag.String("model", "Virtualhost", "Host model name")
+	HostMAC      = flag.String("mac", "00:00:00:00:00:00", "Host MAC address")
+	HostSN       = flag.String("hostsn", "0000000000000", "Host serial number")
+	GuestSN      = flag.String("guestsn", "0000000000000", "Guest serial number")
+	GuestCPUArch = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
+
+	APIPort    = flag.String("api", ":2210", "API port")
+	APITimeout = flag.Int("timeout", 10, "Default timeout")
+	ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
+)
+
+func init() {
+	if size := binary.Size(REQ{}); size != HeaderSize {
+		panic(fmt.Sprintf("REQ header size is %d bytes, expected %d", size, HeaderSize))
+	}
+}
 
 func main() {
-
 	flag.Parse()
+	validateOptions()
 
-	go http_listener(*ApiPort)
+	go httpListener(*APIPort)
 
 	listener, err := net.Listen("tcp", *ListenAddr)
-
 	if err != nil {
 		log.Println("Error listening:", err)
 		return
 	}
-
-    defer func() { _ = listener.Close() }()
+	defer func() { _ = listener.Close() }()
 
 	fmt.Printf("Version %s started listening on %s\n", Version, *ListenAddr)
 
 	for {
 		conn, err := listener.Accept()
-
 		if err != nil {
 			log.Println("Error on accept:", err)
 			return
 		}
 
-		fmt.Printf("New connection from %s\n", conn.RemoteAddr().String())
-
-		go incoming_conn(conn)
+		fmt.Printf("New connection from %s\n", conn.RemoteAddr())
+		go incomingConn(conn)
 	}
 }
 
-func http_listener(port string) {
+func validateOptions() {
+	if *GuestCPUs < 1 {
+		log.Fatal("CPU count must be at least 1")
+	}
+	if *APITimeout < 1 || int64(*APITimeout) > maxTimeoutSeconds {
+		log.Fatalf("Default timeout must be between 1 and %d seconds", maxTimeoutSeconds)
+	}
+}
 
-	Chan = make(chan RET, 1)
-
+func httpListener(port string) {
 	router := http.NewServeMux()
 	router.HandleFunc("/", home)
 	router.HandleFunc("/read", read)
 	router.HandleFunc("/write", write)
 
 	err := http.ListenAndServe(port, router)
-
-	if err != nil && err != http.ErrServerClosed {
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("Error listening: %s", err)
 	}
 }
 
-func incoming_conn(conn net.Conn) {
+func incomingConn(conn net.Conn) {
+	state := &connectionState{conn: conn}
+	setConnection(state)
 
-	defer func() { _ = conn.Close() }()
-	Connection = conn
+	defer func() {
+		clearConnection(state)
+		_ = conn.Close()
+	}()
+
+	buf := make([]byte, PacketSize)
 
 	for {
-		buf := make([]byte, Packet)
-		len, err := conn.Read(buf)
-
+		_, err := io.ReadFull(conn, buf)
 		if err != nil {
-			if err == io.EOF || errors.Is(err, syscall.ECONNRESET) {
+			if err == io.EOF || err == io.ErrUnexpectedEOF ||
+				errors.Is(err, syscall.ECONNRESET) || errors.Is(err, net.ErrClosed) {
 				fmt.Println("Disconnected:", err)
 			} else {
 				log.Println("Read error:", err)
 			}
-			if len != Packet { return }
-		}
-
-		if len != Packet {
-			// Something wrong, close and wait for reconnect
-			log.Printf("Read error: Received %d bytes, not %d\n", len, Packet)
 			return
 		}
 
-		process_req(buf, conn)
+		processReq(buf, state)
 	}
 }
 
-func process_req(buf []byte, conn net.Conn) {
+func setConnection(state *connectionState) {
+	connectionMu.Lock()
+	old := activeConnection
+	activeConnection = state
+	connectionMu.Unlock()
 
+	if old != nil && old != state {
+		failPending(old, errors.New("guest connection was replaced"))
+		_ = old.conn.Close()
+	}
+}
+
+func clearConnection(state *connectionState) {
+	connectionMu.Lock()
+	if activeConnection == state {
+		activeConnection = nil
+	}
+	connectionMu.Unlock()
+
+	failPending(state, errors.New("guest disconnected"))
+}
+
+func getConnection() *connectionState {
+	connectionMu.RLock()
+	state := activeConnection
+	connectionMu.RUnlock()
+
+	return state
+}
+
+func processReq(buf []byte, state *connectionState) {
 	var req REQ
 
-	err := binary.Read(bytes.NewReader(buf), binary.LittleEndian, &req)
-
-	if err != nil {
+	if err := binary.Read(bytes.NewReader(buf[:HeaderSize]), binary.LittleEndian, &req); err != nil {
 		log.Printf("Error on decode: %s\n", err)
 		return
 	}
 
-	var data string
-	var title string
-
-	if req.IsReq == 1 {
-
-		title = "Received"
-		data = string(buf[Header : Header+req.ReqLength])
-		if req.CommandID == 3 { Executed.Store(false) }
-
-	} else if req.IsResp == 1 {
-
-		title = "Response"
-		data = string(buf[Header : Header+req.RespLength])
-
-		if req.CommandID == atomic.LoadInt32(&WaitingFor) && req.CommandID != 0 {
-			atomic.StoreInt32(&WaitingFor, 0)
-			resp := RET{
-				req: req,
-				data: strings.ReplaceAll(data, "\x00", ""),
-			}
-			Chan <- resp
-		}
+	if req.NeedResponse != 0 && req.NeedResponse != 1 {
+		log.Printf("Invalid NeedResponse value: %d\n", req.NeedResponse)
+		return
 	}
 
-	fmt.Printf("%s: %s [%d] %s\n", title, commandsName[int(req.CommandID)],
-		int(req.CommandID), strings.ReplaceAll(data, "\x00", ""))
+	var (
+		data  string
+		title string
+		err   error
+	)
 
-	// if it's a req and need a response
-	if req.IsReq == 1 && req.NeedResponse == 1 {
-		process_resp(req, conn)
+	switch {
+	case req.IsReq == 1 && req.IsResp == 0:
+		title = "Received"
+		data, err = packetData(buf, req.ReqLength)
+		if req.CommandID == 3 {
+			executed.Store(false)
+		}
+
+	case req.IsReq == 0 && req.IsResp == 1:
+		title = "Response"
+		data, err = packetData(buf, req.RespLength)
+
+	default:
+		log.Printf("Invalid packet flags: IsReq=%d IsResp=%d\n", req.IsReq, req.IsResp)
+		return
+	}
+
+	if err != nil {
+		log.Printf("Invalid packet for command %d: %s\n", req.CommandID, err)
+		return
+	}
+
+	cleanData := strings.TrimRight(data, "\x00")
+	fmt.Printf("%s: %s [%d] %s\n", title, commandName(req.CommandID), req.CommandID, cleanData)
+
+	if req.IsResp == 1 {
+		deliverResponse(state, req, cleanData)
+		return
+	}
+
+	if req.NeedResponse == 1 {
+		processResp(req, state)
 	}
 }
 
-func process_resp(req REQ, conn net.Conn) {
+func packetData(buf []byte, length int32) (string, error) {
+	if length < 0 {
+		return "", fmt.Errorf("negative payload length %d", length)
+	}
+	if length > int32(PacketSize-HeaderSize) {
+		return "", fmt.Errorf("payload length %d exceeds maximum %d", length, PacketSize-HeaderSize)
+	}
 
+	end := HeaderSize + int(length)
+	if end > len(buf) {
+		return "", fmt.Errorf("payload ends at byte %d, packet has %d bytes", end, len(buf))
+	}
+
+	return string(buf[HeaderSize:end]), nil
+}
+
+func processResp(req REQ, state *connectionState) {
 	req.IsReq = 0
 	req.IsResp = 1
 	req.ReqLength = 0
 	req.RespLength = 0
 	req.NeedResponse = 0
 
-	data := payload(req)
+	data, handled, err := payload(req)
+	if err != nil {
+		log.Printf("Failed creating response for command %d: %s\n", req.CommandID, err)
+		return
+	}
 
-	if data != "" {
-		req.RespLength = int32(len([]byte(data)) + 1)
+	if handled {
+		if len(data) > maxPayloadSize {
+			log.Printf(
+				"Response for command %d is %d bytes, maximum is %d\n",
+				req.CommandID,
+				len(data),
+				maxPayloadSize,
+			)
+			return
+		}
+		req.RespLength = int32(len(data) + 1)
 	} else {
 		log.Printf("No handler available for command: %d\n", req.CommandID)
 	}
 
-	fmt.Printf("Replied: %s [%d]\n", data, int(req.CommandID))
+	fmt.Printf("Replied: %s [%d]\n", data, req.CommandID)
 
-	logerr(conn.Write(packet(req, data)))
+	if err := sendPacket(state, req, data); err != nil {
+		log.Println("Write failed:", err)
+	}
 }
 
-func packet(req REQ, data string) []byte {
+func encodePacket(req REQ, data string) ([]byte, error) {
+	if len(data) > maxPayloadSize {
+		return nil, fmt.Errorf("payload is %d bytes, maximum is %d", len(data), maxPayloadSize)
+	}
 
-	buf := make([]byte, 0, Packet)
-	writer := bytes.NewBuffer(buf)
+	writer := bytes.NewBuffer(make([]byte, 0, HeaderSize))
+	if err := binary.Write(writer, binary.LittleEndian, &req); err != nil {
+		return nil, fmt.Errorf("encode header: %w", err)
+	}
+	if writer.Len() != HeaderSize {
+		return nil, fmt.Errorf("encoded header is %d bytes, expected %d", writer.Len(), HeaderSize)
+	}
 
-	// write to buf
-	logw(binary.Write(writer, binary.LittleEndian, &req))
-	if data != "" { writer.Write([]byte(data)) }
-
-	// full fill 4096
-	buf = make([]byte, Packet)
+	buf := make([]byte, PacketSize)
 	copy(buf, writer.Bytes())
+	copy(buf[HeaderSize:], data)
 
-	return buf
+	return buf, nil
 }
 
-func payload(req REQ) string {
+func sendPacket(state *connectionState, req REQ, data string) error {
+	buf, err := encodePacket(req, data)
+	if err != nil {
+		return err
+	}
 
-	var data string
+	return state.writePacket(buf)
+}
 
+func (state *connectionState) writePacket(buf []byte) error {
+	state.writeMu.Lock()
+	defer state.writeMu.Unlock()
+
+	for len(buf) > 0 {
+		n, err := state.conn.Write(buf)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrShortWrite
+		}
+		buf = buf[n:]
+	}
+
+	return nil
+}
+
+func payload(req REQ) (string, bool, error) {
 	switch req.CommandID {
-		case 4: // Host version
-			data = fmt.Sprintf(`{"buildnumber":%d,"smallfixnumber":%d}`,
-				*HostBuildNumber, *HostFixNumber)
-		case 5: // Guest SN
-			run_once()
-			data = strings.ToUpper(*GuestSN)
-		case 7: // CPU info
-			data = fmt.Sprintf(`{"cpuinfo":"%s","vcpu_num":%d}`,
-				*GuestCPU_Arch+", "+strconv.Itoa(*GuestCPUs), *GuestCPUs)
-		case 8: // VM version
-			data = fmt.Sprintf(`{"id":"Virtualization","name":"Virtual Machine Manager","timestamp":%d,"version":"%s"}`,
-				*VmTimestamp, *VmVersion)
-		case 10: //  Set network
-			data = `{"detail":[{"success":false,"type":"set_net"}]}`
-		case 11: // Guest UUID
-			run_once()
-			data = uuid(guest_id())
-		case 12: // Cluster UUID
-			run_once()
-			data = uuid(host_id())
-		case 13: // Host SN
-			run_once()
-			data = strings.ToUpper(*HostSN)
-		case 14: // Host MAC
-			data = strings.ToLower(strings.ReplaceAll(*HostMAC, "-", ":"))
-		case 15: // Host model
-			data = *HostModel
-		case 16: // Update Dead line time, always 0x7fffffffffffffff
-			data = "9223372036854775807"
-	}
+	case 4: // Host version
+		return marshalPayload(struct {
+			BuildNumber    int `json:"buildnumber"`
+			SmallFixNumber int `json:"smallfixnumber"`
+		}{
+			BuildNumber:    *HostBuildNumber,
+			SmallFixNumber: *HostFixNumber,
+		})
 
-	return data
+	case 5: // Guest SN
+		runOnce()
+		return strings.ToUpper(*GuestSN), true, nil
+
+	case 7: // CPU info
+		return marshalPayload(struct {
+			CPUInfo string `json:"cpuinfo"`
+			VCPUNum int    `json:"vcpu_num"`
+		}{
+			CPUInfo: *GuestCPUArch + ", " + strconv.Itoa(*GuestCPUs),
+			VCPUNum: *GuestCPUs,
+		})
+
+	case 8: // VM version
+		return marshalPayload(struct {
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			Timestamp int    `json:"timestamp"`
+			Version   string `json:"version"`
+		}{
+			ID:        "Virtualization",
+			Name:      "Virtual Machine Manager",
+			Timestamp: *VMTimestamp,
+			Version:   *VMVersion,
+		})
+
+	case 10: // Set network
+		return marshalPayload(struct {
+			Detail []struct {
+				Success bool   `json:"success"`
+				Type    string `json:"type"`
+			} `json:"detail"`
+		}{
+			Detail: []struct {
+				Success bool   `json:"success"`
+				Type    string `json:"type"`
+			}{
+				{Success: false, Type: "set_net"},
+			},
+		})
+
+	case 11: // Guest UUID
+		runOnce()
+		return uuid(guestID()), true, nil
+
+	case 12: // Cluster UUID
+		runOnce()
+		return uuid(hostID()), true, nil
+
+	case 13: // Host SN
+		runOnce()
+		return strings.ToUpper(*HostSN), true, nil
+
+	case 14: // Host MAC
+		return strings.ToLower(strings.ReplaceAll(*HostMAC, "-", ":")), true, nil
+
+	case 15: // Host model
+		return *HostModel, true, nil
+
+	case 16: // Update deadline, always 0x7fffffffffffffff
+		return "9223372036854775807", true, nil
+
+	default:
+		return "", false, nil
+	}
 }
 
-func send_command(CommandID int32, SubCommand int32, needsResp int32) bool {
-
-	req := REQ{
-		IsReq: 1,
-		IsResp: 0,
-		ReqLength: 0,
-		RespLength: 0,
-		GuestID: 10000000,
-		RandID: rand.Int63(),
-		GuestUUID: guest_id(),
-		NeedResponse: needsResp,
-		CommandID: CommandID,
-		SubCommand: SubCommand,
+func marshalPayload(value any) (string, bool, error) {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return "", false, err
 	}
 
-	//fmt.Printf("Writing command %d\n", CommandID)
+	return string(data), true, nil
+}
 
-	if Connection == nil { return false }
-	_, err := Connection.Write(packet(req, ""))
-	if err == nil { return true }
+func newRequest(commandID int32, subCommand int32, needsResponse int32) REQ {
+	return REQ{
+		RandID:       rand.Int63(),
+		GuestUUID:    guestID(),
+		GuestID:      10000000,
+		IsReq:        1,
+		IsResp:       0,
+		NeedResponse: needsResponse,
+		ReqLength:    0,
+		RespLength:   0,
+		CommandID:    commandID,
+		SubCommand:   subCommand,
+	}
+}
 
-	log.Println("Write error:", err)
-	return false
+func registerPending(request *pendingRequest) bool {
+	pendingMu.Lock()
+	defer pendingMu.Unlock()
+
+	if pending != nil {
+		return false
+	}
+
+	pending = request
+	return true
+}
+
+func cancelPending(request *pendingRequest) bool {
+	pendingMu.Lock()
+	defer pendingMu.Unlock()
+
+	if pending != request {
+		return false
+	}
+
+	pending = nil
+	return true
+}
+
+func deliverResponse(state *connectionState, req REQ, data string) {
+	pendingMu.Lock()
+	request := pending
+	if request == nil || request.connection != state ||
+		request.commandID != req.CommandID || request.randID != req.RandID {
+		pendingMu.Unlock()
+		return
+	}
+	pending = nil
+	pendingMu.Unlock()
+
+	request.result <- pendingResult{
+		response: RET{
+			req:  req,
+			data: data,
+		},
+	}
+}
+
+func failPending(state *connectionState, err error) {
+	pendingMu.Lock()
+	request := pending
+	if request == nil || request.connection != state {
+		pendingMu.Unlock()
+		return
+	}
+	pending = nil
+	pendingMu.Unlock()
+
+	request.result <- pendingResult{err: err}
 }
 
 func read(w http.ResponseWriter, r *http.Request) {
+	writerMu.Lock()
+	defer writerMu.Unlock()
 
-	w.Header().Set("Content-Type", "application/json")
-
-	Writer.Lock()
-	defer Writer.Unlock()
-
-	query := r.URL.Query()
-	cmd := query.Get("command")
-	timeout := query.Get("timeout")
-	wait := time.Duration(*ApiTimeout)
-
-	if len(strings.TrimSpace(cmd)) == 0 {
-		fail(w, "No command specified")
+	commandID, err := parseCommand(r.URL.Query().Get("command"))
+	if err != nil {
+		fail(w, err.Error())
 		return
 	}
 
-	commandID, err := strconv.Atoi(cmd)
-
-	if err != nil || commandID < 1 {
-		fail(w, fmt.Sprintf("Failed to parse command: %s", cmd))
+	wait, err := parseTimeout(r.URL.Query().Get("timeout"))
+	if err != nil {
+		fail(w, err.Error())
 		return
 	}
 
-	if len(strings.TrimSpace(timeout)) > 0 {
-		duration, err := strconv.Atoi(timeout)
-		if err != nil || duration < 1 {
-			fail(w, fmt.Sprintf("Failed to parse timeout: %s", timeout))
-			return
-		}
-		wait = time.Duration(duration)
-	}
-
-	if Connection == nil || Chan == nil {
+	state := getConnection()
+	if state == nil {
 		fail(w, "No connection to guest")
 		return
 	}
 
-	for len(Chan) > 0 {
-		log.Println("Warning: channel was not empty?")
-		<-Chan
+	req := newRequest(commandID, 1, 1)
+	request := &pendingRequest{
+		connection: state,
+		commandID:  commandID,
+		randID:     req.RandID,
+		result:     make(chan pendingResult, 1),
 	}
 
-	fmt.Printf("Request: %s [%d]\n", commandsName[commandID], commandID)
-	atomic.StoreInt32(&WaitingFor, (int32)(commandID))
-
-	if !send_command((int32)(commandID), 1, 1) {
-		atomic.StoreInt32(&WaitingFor, 0)
-		fail(w, fmt.Sprintf("Failed reading command %d from guest", commandID))
+	if !registerPending(request) {
+		fail(w, "Another request is already pending")
 		return
 	}
 
-	var resp RET
+	fmt.Printf("Request: %s [%d]\n", commandName(commandID), commandID)
 
-	select {
-		case res := <-Chan:
-			resp = res
-		case <-time.After(wait * time.Second):
-			atomic.StoreInt32(&WaitingFor, 0)
-			fail(w, fmt.Sprintf("Timeout while reading command %d from guest", commandID))
-			return
+	if err := sendPacket(state, req, ""); err != nil {
+		cancelPending(request)
+		fail(w, fmt.Sprintf("Failed reading command %d from guest: %s", commandID, err))
+		return
 	}
 
-	atomic.StoreInt32(&WaitingFor, 0)
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
 
-	if resp.req.CommandID != (int32)(commandID) {
-		fail(w, fmt.Sprintf("Received wrong response for command %d from guest: %d",
-			commandID, resp.req.CommandID))
+	var result pendingResult
+
+	select {
+	case result = <-request.result:
+	case <-timer.C:
+		if cancelPending(request) {
+			fail(w, fmt.Sprintf("Timeout while reading command %d from guest", commandID))
+			return
+		}
+
+		// The response or disconnect claimed the pending request at the same
+		// moment the timer fired. Wait for the already-committed result.
+		result = <-request.result
+	}
+
+	if result.err != nil {
+		fail(w, fmt.Sprintf("Failed reading command %d from guest: %s", commandID, result.err))
+		return
+	}
+
+	resp := result.response
+	if resp.req.CommandID != commandID || resp.req.RandID != req.RandID {
+		fail(w, fmt.Sprintf("Received mismatched response for command %d", commandID))
 		return
 	}
 
@@ -386,93 +628,117 @@ func read(w http.ResponseWriter, r *http.Request) {
 }
 
 func write(w http.ResponseWriter, r *http.Request) {
+	writerMu.Lock()
+	defer writerMu.Unlock()
 
-	w.Header().Set("Content-Type", "application/json")
+	commandID, err := parseCommand(r.URL.Query().Get("command"))
+	if err != nil {
+		fail(w, err.Error())
+		return
+	}
 
-	Writer.Lock()
-	defer Writer.Unlock()
-
-	if Connection == nil {
+	state := getConnection()
+	if state == nil {
 		fail(w, "No connection to guest")
 		return
 	}
 
-	query := r.URL.Query()
-	cmd := query.Get("command")
+	fmt.Printf("Command: %s [%d]\n", commandName(commandID), commandID)
 
-	if len(strings.TrimSpace(cmd)) == 0 {
-		fail(w, "No command specified")
-		return
-	}
-
-	commandID, err := strconv.Atoi(cmd)
-
-	if err != nil || commandID < 1 {
-		fail(w, fmt.Sprintf("Failed to parse command: %s", cmd))
-		return
-	}
-
-	fmt.Printf("Command: %s [%d]\n", commandsName[commandID], commandID)
-
-	if !send_command((int32)(commandID), 1, 0) {
-		fail(w, fmt.Sprintf("Failed sending command %d to guest", commandID))
+	req := newRequest(commandID, 1, 0)
+	if err := sendPacket(state, req, ""); err != nil {
+		fail(w, fmt.Sprintf("Failed sending command %d to guest: %s", commandID, err))
 		return
 	}
 
 	ok(w, "")
 }
 
-func home(w http.ResponseWriter, r *http.Request) {
+func parseCommand(value string) (int32, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, errors.New("No command specified")
+	}
 
-	w.Header().Set("Content-Type", "application/json")
+	commandID, err := strconv.ParseInt(value, 10, 32)
+	if err != nil || commandID < 1 {
+		return 0, fmt.Errorf("Failed to parse command: %s", value)
+	}
+
+	return int32(commandID), nil
+}
+
+func parseTimeout(value string) (time.Duration, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Duration(*APITimeout) * time.Second, nil
+	}
+
+	seconds, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || seconds < 1 || seconds > maxTimeoutSeconds {
+		return 0, fmt.Errorf("Failed to parse timeout: %s", value)
+	}
+
+	return time.Duration(seconds) * time.Second, nil
+}
+
+func commandName(commandID int32) string {
+	if name, ok := commandsName[commandID]; ok {
+		return name
+	}
+
+	return "Unknown command"
+}
+
+func home(w http.ResponseWriter, _ *http.Request) {
 	fail(w, "No command specified")
 }
 
-func escape(msg string) string {
-
-	msg = strings.ReplaceAll(msg, "\\", "\\\\")
-	msg = strings.ReplaceAll(msg, "\"", "\\\"")
-	msg = strings.ReplaceAll(msg, "\n", " ")
-	msg = strings.ReplaceAll(msg, "\r", " ")
-	msg = strings.ReplaceAll(msg, "\t", " ")
-
-	return msg
-}
-
 func fail(w http.ResponseWriter, msg string) {
-
 	log.Println("API: " + msg)
-	w.WriteHeader(http.StatusInternalServerError)
-	logerr(w.Write([]byte(`{"status": "error", "message": "` + escape(msg) + `", "data": null}`)))
+	writeAPIResponse(w, http.StatusInternalServerError, apiResponse{
+		Status:  "error",
+		Data:    nil,
+		Message: msg,
+	})
 }
 
 func ok(w http.ResponseWriter, data string) {
+	writeAPIResponse(w, http.StatusOK, apiResponse{
+		Status:  "success",
+		Data:    apiData(data),
+		Message: nil,
+	})
+}
 
-	if strings.TrimSpace(data) == "" { 
-		data = "null" 
-	} else {
-		if !strings.HasPrefix(strings.TrimSpace(data), "{") {
-			data = "\"" + escape(data) + "\""
-		}
+func apiData(data string) any {
+	trimmed := strings.TrimSpace(data)
+	if trimmed == "" {
+		return nil
 	}
 
-	w.WriteHeader(http.StatusOK)
-	logerr(w.Write([]byte(`{"status": "success", "data": ` + data + `, "message": null}`)))
+	if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) &&
+		json.Valid([]byte(trimmed)) {
+		return json.RawMessage(trimmed)
+	}
+
+	return data
 }
 
-func logerr(n int, err error) {
-	logw(err)
+func writeAPIResponse(w http.ResponseWriter, status int, response apiResponse) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Println("API write failed:", err)
+	}
 }
 
-func logw(err error) {
-	if err != nil { log.Println("Write failed:", err) }
-}
-
-func host_id() [16]byte {
+func hostID() [16]byte {
 	return md5.Sum([]byte("h" + strings.ToUpper(*HostSN)))
 }
 
-func guest_id() [16]byte {
+func guestID() [16]byte {
 	return md5.Sum([]byte("g" + strings.ToUpper(*GuestSN)))
 }
 
@@ -480,42 +746,53 @@ func uuid(b [16]byte) string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%12x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-func run_once() {
+func runOnce() {
+	if !executed.CompareAndSwap(false, true) {
+		return
+	}
 
-	if Executed.Load() { return }
+	dir, err := executableDir()
+	if err != nil {
+		executed.Store(false)
+		log.Println("Path error:", err)
+		return
+	}
 
-	Executed.Store(true)
-	file := path() + "/print.sh"
-	if exists(file) { execute(file, nil) }
+	file := filepath.Join(dir, "print.sh")
+	if exists(file) && !execute(file, nil) {
+		executed.Store(false)
+	}
 }
 
-func path() string {
-
+func executableDir() (string, error) {
 	exePath, err := os.Executable()
-	if err == nil { return filepath.Dir(exePath) }
+	if err != nil {
+		return "", err
+	}
 
-	log.Println("Path error:", err)
-	return ""
+	return filepath.Dir(exePath), nil
 }
 
 func exists(name string) bool {
-
 	_, err := os.Stat(name)
 	return err == nil
 }
 
 func execute(script string, command []string) bool {
+	cmd := exec.Command(script, command...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	cmd := &exec.Cmd{
-		Path:   script,
-		Args:   command,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
+	if err := cmd.Start(); err != nil {
+		log.Println("Cannot run:", err)
+		return false
 	}
 
-	err := cmd.Start()
-	if err == nil { return true }
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			log.Println("Command failed:", err)
+		}
+	}()
 
-	log.Println("Cannot run:", err)
-	return false
+	return true
 }
