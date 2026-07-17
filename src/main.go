@@ -649,12 +649,12 @@ func write(w http.ResponseWriter, r *http.Request) {
 func parseCommand(value string) (int32, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return 0, errors.New("No command specified")
+		return 0, errors.New("no command specified")
 	}
 
 	commandID, err := strconv.ParseInt(value, 10, 32)
 	if err != nil || commandID < 1 {
-		return 0, fmt.Errorf("Failed to parse command: %s", value)
+		return 0, fmt.Errorf("failed to parse command: %s", value)
 	}
 
 	return int32(commandID), nil
@@ -668,7 +668,7 @@ func parseTimeout(value string) (time.Duration, error) {
 
 	seconds, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || seconds < 1 || seconds > maxTimeoutSeconds {
-		return 0, fmt.Errorf("Failed to parse timeout: %s", value)
+		return 0, fmt.Errorf("failed to parse timeout: %s", value)
 	}
 
 	return time.Duration(seconds) * time.Second, nil
@@ -687,6 +687,10 @@ func home(w http.ResponseWriter, _ *http.Request) {
 }
 
 func fail(w http.ResponseWriter, msg string) {
+	if msg != "" {
+		msg = strings.ToUpper(msg[:1]) + msg[1:]
+	}
+
 	log.Println("API: " + msg)
 	writeAPIResponse(w, http.StatusInternalServerError, apiResponse{
 		Status:  "error",
