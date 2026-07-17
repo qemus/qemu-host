@@ -6,19 +6,20 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
 	"flag"
 	"sync"
+	"time"
 	"bytes"
 	"errors"
+	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
-	"strconv"
-	"os/exec"
 	"net/http"
 	"math/rand"
 	"crypto/md5"
 	"sync/atomic"
+	"encoding/json"
 	"path/filepath"
 	"encoding/binary"
 )
@@ -74,7 +75,6 @@ type pendingResult struct {
 type pendingRequest struct {
 	connection *connectionState
 	commandID  int32
-	randID     int64
 	result     chan pendingResult
 }
 
@@ -519,13 +519,15 @@ func deliverResponse(state *connectionState, req REQ, data string) {
 	pendingMu.Lock()
 	request := pending
 	if request == nil || request.connection != state ||
-		request.commandID != req.CommandID || request.randID != req.RandID {
+		req.CommandID == 0 || req.CommandID != request.commandID {
 		pendingMu.Unlock()
 		return
 	}
 	pending = nil
 	pendingMu.Unlock()
 
+	// Preserve the original protocol behavior: responses are matched only by
+	// CommandID. RandID is not assumed to be echoed by the guest.
 	request.result <- pendingResult{
 		response: RET{
 			req:  req,
@@ -573,12 +575,11 @@ func read(w http.ResponseWriter, r *http.Request) {
 	request := &pendingRequest{
 		connection: state,
 		commandID:  commandID,
-		randID:     req.RandID,
 		result:     make(chan pendingResult, 1),
 	}
 
 	if !registerPending(request) {
-		fail(w, "Another request is already pending")
+		fail(w, "A previous request is still pending")
 		return
 	}
 
@@ -603,8 +604,8 @@ func read(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// The response or disconnect claimed the pending request at the same
-		// moment the timer fired. Wait for the already-committed result.
+		// A response or disconnect claimed the request at the same moment the
+		// timer fired. Wait for the already-committed result.
 		result = <-request.result
 	}
 
@@ -614,12 +615,7 @@ func read(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := result.response
-	if resp.req.CommandID != commandID || resp.req.RandID != req.RandID {
-		fail(w, fmt.Sprintf("Received mismatched response for command %d", commandID))
-		return
-	}
-
-	if resp.data == "" && resp.req.CommandID != 6 {
+	if resp.data == "" && commandID != 6 {
 		fail(w, fmt.Sprintf("Received no data for command %d", commandID))
 		return
 	}
