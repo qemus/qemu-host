@@ -172,14 +172,14 @@ func parseListener(value string) (string, string, error) {
 	case strings.HasPrefix(value, "unix:"):
 		address := strings.TrimPrefix(value, "unix:")
 		if !filepath.IsAbs(address) {
-			return "", "", errors.New("Unix socket path must be absolute")
+			return "", "", errors.New("unix socket path must be absolute")
 		}
 		return "unix", address, nil
 
 	case strings.HasPrefix(value, "tcp:"):
 		address := strings.TrimPrefix(value, "tcp:")
 		if address == "" {
-			return "", "", errors.New("TCP listener address cannot be empty")
+			return "", "", errors.New("tcp listener address cannot be empty")
 		}
 		return "tcp", address, nil
 
