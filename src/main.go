@@ -117,9 +117,9 @@ var (
 	GuestSN      = flag.String("guestsn", "0000000000000", "Guest serial number")
 	GuestCPUArch = flag.String("cpu_arch", "QEMU, Virtual CPU, X86_64", "CPU arch")
 
-	APIPort    = flag.String("api", ":2210", "API port")
+	APIPort    = flag.String("api", ":2210", "API TCP address or Unix socket path")
 	APITimeout = flag.Int("timeout", 10, "Default timeout")
-	ListenAddr = flag.String("addr", "0.0.0.0:12345", "Listen address")
+	ListenAddr = flag.String("addr", "0.0.0.0:12345", "Guest TCP address or Unix socket path")
 )
 
 func init() {
@@ -132,16 +132,23 @@ func main() {
 	flag.Parse()
 	validateOptions()
 
-	go httpListener(*APIPort)
-
-	listener, err := net.Listen("tcp", *ListenAddr)
+	listener, err := openListener(*ListenAddr)
 	if err != nil {
-		log.Println("Error listening:", err)
+		log.Println("Error starting guest listener:", err)
 		return
 	}
 	defer func() { _ = listener.Close() }()
 
-	fmt.Printf("Version %s started listening on %s\n", Version, *ListenAddr)
+	apiListener, err := openListener(*APIPort)
+	if err != nil {
+		log.Println("Error starting API listener:", err)
+		return
+	}
+	defer func() { _ = apiListener.Close() }()
+
+	go httpListener(apiListener)
+
+	fmt.Printf("Version %s started listening on %s\n", Version, listener.Addr())
 
 	for {
 		conn, err := listener.Accept()
@@ -155,6 +162,74 @@ func main() {
 	}
 }
 
+func parseListener(value string) (string, string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", "", errors.New("listener address cannot be empty")
+	}
+
+	switch {
+	case strings.HasPrefix(value, "unix:"):
+		address := strings.TrimPrefix(value, "unix:")
+		if !filepath.IsAbs(address) {
+			return "", "", errors.New("unix socket path must be absolute")
+		}
+		return "unix", address, nil
+
+	case strings.HasPrefix(value, "tcp:"):
+		address := strings.TrimPrefix(value, "tcp:")
+		if address == "" {
+			return "", "", errors.New("tcp listener address cannot be empty")
+		}
+		return "tcp", address, nil
+
+	case filepath.IsAbs(value):
+		return "unix", value, nil
+
+	default:
+		return "tcp", value, nil
+	}
+}
+
+func removeSocket(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("%s already exists and is not a Unix socket", path)
+	}
+
+	return os.Remove(path)
+}
+
+func openListener(value string) (net.Listener, error) {
+	network, address, err := parseListener(value)
+	if err != nil {
+		return nil, err
+	}
+
+	if network == "unix" {
+		if err := removeSocket(address); err != nil {
+			return nil, fmt.Errorf("prepare Unix socket: %w", err)
+		}
+	}
+
+	listener, err := net.Listen(network, address)
+	if err != nil {
+		return nil, err
+	}
+
+	if unixListener, ok := listener.(*net.UnixListener); ok {
+		unixListener.SetUnlinkOnClose(true)
+	}
+
+	return listener, nil
+}
+
 func validateOptions() {
 	if *GuestCPUs < 1 {
 		log.Fatal("CPU count must be at least 1")
@@ -164,14 +239,16 @@ func validateOptions() {
 	}
 }
 
-func httpListener(port string) {
+func httpListener(listener net.Listener) {
 	router := http.NewServeMux()
 	router.HandleFunc("/", home)
 	router.HandleFunc("/read", read)
 	router.HandleFunc("/write", write)
 
-	err := http.ListenAndServe(port, router)
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+	err := http.Serve(listener, router)
+	if err != nil &&
+		!errors.Is(err, http.ErrServerClosed) &&
+		!errors.Is(err, net.ErrClosed) {
 		log.Fatalf("Error listening: %s", err)
 	}
 }
