@@ -157,7 +157,7 @@ func main() {
 			return
 		}
 
-		fmt.Printf("New connection from %s\n", conn.RemoteAddr())
+		fmt.Println("Guest connected")
 		go incomingConn(conn)
 	}
 }
