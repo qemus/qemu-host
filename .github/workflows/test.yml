@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - "**/*.go"
+      - "**/go.mod"
+      - "**/go.sum"
+      - "Dockerfile"
+      - ".github/workflows/*.yml"
 
 name: "Test"
 permissions: {}
