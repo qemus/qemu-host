@@ -1,4 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":disableDependencyDashboard"]
+  "extends": [
+    "config:recommended",
+    ":disableDependencyDashboard"
+  ],
+  "packageRules": [
+    {
+      "description": "Do not update the Go version",
+      "matchDatasources": ["golang-version"],
+      "enabled": false
+    }
+  ]
 }
