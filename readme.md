@@ -8,7 +8,6 @@
 [![Version]][tag_url]
 [![Size]][tag_url]
 [![Package]][pkg_url]
-[![Pulls]][hub_url]
 
 </div></h1>
 
@@ -24,13 +23,13 @@ It is used to exchange information between the host and guest, and to execute co
 services:
   qemu:
     container_name: qemu
-    image: qemux/qemu-host
+    image: ghcr.io/qemus/qemu-host
 ```
 
 ##### Docker CLI:
 
 ```bash
-docker run -it --rm qemux/qemu-host
+docker run -it --rm ghcr.io/qemus/qemu-host
 ```
 
 ### Background 📜
@@ -68,12 +67,10 @@ The current list of supported RPCs is documented in qemu.git/qapi-schema-guest.j
 [![Stargazers](https://raw.githubusercontent.com/star-stats/stars/refs/heads/data/charts/qemus-qemu-host.svg)](https://github.com/qemus/qemu-host/stargazers)
 
 [build_url]: https://github.com/qemus/qemu-host/
-[hub_url]: https://hub.docker.com/r/qemux/qemu-host/
 [tag_url]: https://hub.docker.com/r/qemux/qemu-host/tags
 [pkg_url]: https://github.com/qemus/qemu-host/pkgs/container/qemu-host
 
 [Build]: https://github.com/qemus/qemu-host/actions/workflows/build.yml/badge.svg
 [Size]: https://img.shields.io/docker/image-size/qemux/qemu-host/latest?color=066da5&label=size
-[Pulls]: https://img.shields.io/docker/pulls/qemux/qemu-host.svg?style=flat&label=pulls&logo=docker
 [Version]: https://img.shields.io/docker/v/qemux/qemu-host/latest?arch=amd64&sort=semver&color=066da5
 [Package]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fipitio.github.io%2Fbackage%2Fqemus%2Fqemu-host%2Fqemu-host.json&query=%24.downloads&logo=github&style=flat&color=066da5&label=pulls
