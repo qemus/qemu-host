@@ -7,7 +7,19 @@
   "packageRules": [
     {
       "description": "Do not update the Go version",
-      "matchDatasources": ["golang-version"],
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Do not update the Go Docker image",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "golang"
+      ],
       "enabled": false
     }
   ]
